@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Smiley AI</title>
-<link rel="stylesheet" href="style.css?v=61" />
+<link rel="stylesheet" href="style.css?v=63" />
 </head>
 <body>
 
@@ -29,6 +29,9 @@
         <button onclick="applySmileyDetail('normal')">Normal</button>
         <button id="bootMusicBtn" onclick="toggleMusic()">Music: off</button>
       </div>
+    </div>
+    <div class="mode-pick">
+      <button id="mobileModeBtn" onclick="enableMobileMode()">📱 Mobile Mode</button>
     </div>
     <p>Welcome to your computer.<br>Open apps, play games, hang out with Smiley.</p>
     <div>
@@ -73,6 +76,9 @@
       <div id="handR" class="s-hand right hidden">👋</div>
     </div>
   </div>
+
+  <!-- finger/cursor indicator: shows where your mouse or finger is -->
+  <div id="fingerCursor">👆</div>
 
   <!-- rival AI pets: appear right next to Smiley when downloaded -->
   <div id="pets">
@@ -288,6 +294,6 @@
   </div>
 </div>
 
-<script src="script.js?v=61"></script>
+<script src="script.js?v=63"></script>
 </body>
 </html>

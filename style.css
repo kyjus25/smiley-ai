@@ -1308,3 +1308,45 @@ html, body {
 }
 /* body stays locked so nothing scrolls outside the screen */
 body { overscroll-behavior: none; position: fixed; inset: 0; }
+
+/* ===== MOBILE MODE (forced via button) + BUTTON FIXES ===== */
+.mode-pick { display: flex; justify-content: center; margin: 12px 0; }
+#mobileModeBtn {
+  background: linear-gradient(180deg, #4fc97a, #2f9c56); color: white;
+  border: none; border-radius: 10px; padding: 12px 22px; font-size: 15px;
+  font-weight: bold; box-shadow: 0 3px 10px rgba(0,0,0,.35); cursor: pointer;
+}
+body.mobile-mode #boot button,
+body.mobile-mode #desktop button {
+  min-height: 42px; padding: 10px 14px; font-size: 14px; border-radius: 8px;
+}
+body.mobile-mode .window {
+  width: 96vw !important; max-width: 96vw !important; left: 2vw !important;
+  height: 70vh !important; resize: none !important;
+}
+body.mobile-mode .win-body input,
+body.mobile-mode .win-body button {
+  min-height: 42px; padding: 10px 12px; font-size: 14px;
+}
+body.mobile-mode .shop-row { flex-wrap: wrap; gap: 6px; }
+body.mobile-mode .shop-row button { width: 100%; min-height: 40px; }
+body.mobile-mode .gesture-grid .gbtn { min-height: 40px; padding: 8px 10px; font-size: 13px; }
+body.mobile-mode #taskbar { height: 52px; gap: 5px; overflow-x: auto; }
+body.mobile-mode #taskbar > * { min-height: 40px; padding: 8px 10px; font-size: 12px; }
+body.mobile-mode #startMenu button { padding: 12px; min-height: 44px; font-size: 14px; }
+body.mobile-mode .icon { padding: 10px 4px; font-size: 11px; }
+body.mobile-mode .icon .emoji { font-size: 26px; }
+body.mobile-mode #smiley { transform: scale(.85); transform-origin: bottom right; }
+
+/* ===== FINGER / CURSOR INDICATOR: shows where your mouse or finger is ===== */
+#fingerCursor {
+  position: fixed; z-index: 9999; pointer-events: none;
+  font-size: 22px; transform: translate(-30%, -60%);
+  opacity: 0; transition: opacity .15s;
+  filter: drop-shadow(1px 2px 2px rgba(0,0,0,.4));
+}
+#fingerCursor.show { opacity: .95; }
+#fingerCursor.down { transform: translate(-30%, -60%) scale(1.25); }
+@media (pointer: coarse) {
+  #fingerCursor { font-size: 30px; }
+}

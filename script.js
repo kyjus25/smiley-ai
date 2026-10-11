@@ -114,6 +114,7 @@ let smileyGone = false; // true when dragged off screen (until his app opens)
 // App ownership: only installer/settings/files/games are free. Everything else costs fake cash.
 let ownedApps = { installer: true, settings: true, files: true, games: true, terminal: true, phone: true, firewall: true, updates: true, smiley: true, test: true };
 let devMode = false; // developer mode (admin + ultra): everything free + test room
+let mobileMode = false; // forced mobile layout (button on loading screen for phone players)
 let smileySize = 1; // desktop pet scale 0.5x - 2x
 function setSmileySize(v) {
   smileySize = Math.max(0.5, Math.min(2, parseFloat(v) || 1));
@@ -332,6 +333,16 @@ function toggleFullscreen() {
     }
   } catch (e) {}
 }
+// Mobile Mode: force a phone-friendly layout (for mobile players who land in computer mode).
+function enableMobileMode() {
+  mobileMode = true;
+  document.body.classList.add("mobile-mode");
+  document.getElementById("boot")?.classList.add("mobile-mode");
+  document.getElementById("desktop")?.classList.add("mobile-mode");
+  const btn = document.getElementById("mobileModeBtn");
+  if (btn) btn.textContent = "📱 Mobile Mode: ON";
+  saveGame();
+}
 function clearMemory() {
   // Revoke everything earned first: admin panel, hacking panel, cash, outfits, memory.
   isAdmin = false;
@@ -372,7 +383,7 @@ function saveGame() {
       name: smileyMemory.name, insults: smileyMemory.insultCount, compliments: smileyMemory.complimentCount,
       feel: smileyFeel, slides, slideIdx, follow: smileyFollow, mailPopups,
       admin: isAdmin, infinite: infiniteMoney, history: appHistory.slice(-50),
-      color: smileyColor, banned: bankBanned, installed, trash: trashBin, apps: ownedApps, hacker: hackerPerms, wall: wallpaper, cmds: customCmds, censor: censorOn, games: [clickerWins, luckyWins], arcade: arcadeOn, dev: devMode, size: smileySize, scythe: scytheUnlocked, scytheDesk: scytheDesktopOn, suggestions: updateSuggestions, bannedCallers: [...bannedCallers], windowsEdition,
+      color: smileyColor, banned: bankBanned, installed, trash: trashBin, apps: ownedApps, hacker: hackerPerms, wall: wallpaper, cmds: customCmds, censor: censorOn, games: [clickerWins, luckyWins], arcade: arcadeOn, dev: devMode, size: smileySize, scythe: scytheUnlocked, scytheDesk: scytheDesktopOn, suggestions: updateSuggestions, bannedCallers: [...bannedCallers], windowsEdition, mobileMode,
     }));
   } catch (e) {}
 }
@@ -410,6 +421,7 @@ function loadGame() {
   if (Array.isArray(d.suggestions)) updateSuggestions = d.suggestions;
   if (Array.isArray(d.bannedCallers)) d.bannedCallers.forEach((s) => bannedCallers.add(s));
   if (d.windowsEdition) { windowsEdition = true; applyWindowsTheme(); }
+  if (d.mobileMode) { enableMobileMode(); }
   if (d.scytheDesk) { scytheDesktopOn = true; document.getElementById("petScythe")?.classList.remove("hidden"); }
   if (d.censor) censorOn = true;
   if (typeof d.dev === "boolean") devMode = d.dev;
@@ -1279,19 +1291,33 @@ function renderTasks() {
   });
 }
 function makeDraggable(win, handle) {
-  let ox, oy;
-  handle.onpointerdown = (e) => {
-    ox = e.clientX - win.offsetLeft; oy = e.clientY - win.offsetTop;
+  let ox, oy, active = false;
+  handle.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    active = true;
+    handle.setPointerCapture?.(e.pointerId);
+    ox = e.clientX - win.offsetLeft;
+    oy = e.clientY - win.offsetTop;
     const move = (ev) => {
-      const maxX = Math.max(8, document.getElementById("desktop").clientWidth - win.offsetWidth - 8);
-      const maxY = Math.max(8, document.getElementById("desktop").clientHeight - win.offsetHeight - 8);
+      if (!active) return;
+      ev.preventDefault();
+      const deskW = document.getElementById("desktop").clientWidth;
+      const deskH = document.getElementById("desktop").clientHeight;
+      const maxX = Math.max(0, deskW - 80);
+      const maxY = Math.max(0, deskH - 40);
       win.style.left = Math.max(-win.offsetWidth + 80, Math.min(ev.clientX - ox, maxX)) + "px";
-      win.style.top = Math.max(0, Math.min(ev.clientY - oy, maxY)) + "px";
+      win.style.top = Math.max(0, Math.min(ev.clientY - oy, maxY)) + "px"; // full up/down freedom
     };
-    const up = () => { document.removeEventListener("pointermove", move); document.removeEventListener("pointerup", up); };
+    const up = (ev) => {
+      active = false;
+      handle.releasePointerCapture?.(ev.pointerId);
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", up);
+    };
     document.addEventListener("pointermove", move);
     document.addEventListener("pointerup", up);
-  };
+    document.addEventListener("pointercancel", up);
+  });
 }
 
 // --- Start menu ---
@@ -4836,3 +4862,34 @@ function renderSuggestionList() {
         : `<div style="opacity:.6">Your ideas will show up here.</div>`);
 }
 // These live at top level so buttons can call them from anywhere.
+
+// --- Finger / cursor indicator: follows your mouse OR finger so you always see the point ---
+(function () {
+  const fc = document.getElementById("fingerCursor");
+  if (!fc) return;
+  let hideT;
+  const show = (x, y, down) => {
+    fc.style.left = x + "px";
+    fc.style.top = y + "px";
+    fc.classList.add("show");
+    fc.classList.toggle("down", !!down);
+    clearTimeout(hideT);
+    hideT = setTimeout(() => fc.classList.remove("show", "down"), 2200);
+  };
+  // desktop pointer (mouse)
+  document.addEventListener("mousemove", (e) => show(e.clientX, e.clientY, false), { passive: true });
+  // touch: show exactly where the finger is, and while pressing
+  document.addEventListener("touchstart", (e) => {
+    const t = e.touches[0]; if (t) show(t.clientX, t.clientY, true);
+  }, { passive: true });
+  document.addEventListener("touchmove", (e) => {
+    const t = e.touches[0]; if (t) show(t.clientX, t.clientY, true);
+  }, { passive: true });
+  document.addEventListener("touchend", (e) => {
+    const t = e.changedTouches[0]; if (t) show(t.clientX, t.clientY, false);
+    setTimeout(() => fc.classList.remove("down"), 120);
+  }, { passive: true });
+  // pointer down/up anywhere
+  document.addEventListener("pointerdown", (e) => show(e.clientX, e.clientY, true), { passive: true });
+  document.addEventListener("pointerup", (e) => show(e.clientX, e.clientY, false), { passive: true });
+})();
