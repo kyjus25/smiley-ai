@@ -1350,3 +1350,35 @@ body.mobile-mode #smiley { transform: scale(.85); transform-origin: bottom right
 @media (pointer: coarse) {
   #fingerCursor { font-size: 30px; }
 }
+
+/* ===== POPUP SIZE FIX: windows no longer huge on desktop or mobile ===== */
+.window {
+  width: 420px !important;
+  height: 320px !important;
+  max-width: 92vw !important;
+  max-height: 74vh !important;
+  resize: both; overflow: hidden;
+}
+.window[data-app="games"] { height: 380px !important; }
+#body-games { min-height: 0 !important; max-height: none; }
+.win-body { overflow: auto; }
+@media (max-width: 820px) {
+  .window {
+    width: 90vw !important; max-width: 94vw !important;
+    left: 5vw !important;
+    height: 52vh !important; max-height: 66vh !important;
+    resize: vertical;
+  }
+  .window[data-app="games"] { height: 56vh !important; max-height: 70vh !important; }
+}
+@media (max-width: 420px) {
+  .window {
+    width: 92vw !important; left: 4vw !important;
+    height: 48vh !important; max-height: 62vh !important;
+  }
+}
+body.mobile-mode .window {
+  width: 92vw !important; max-width: 94vw !important; left: 4vw !important;
+  height: 52vh !important; max-height: 66vh !important; resize: vertical !important;
+}
+body.mobile-mode .window[data-app="games"] { height: 56vh !important; max-height: 70vh !important; }
