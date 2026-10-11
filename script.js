@@ -1052,16 +1052,10 @@ function renderIcons() {
     d.dataset.app = a.id;
     d.innerHTML = `<span class="emoji">${a.emoji}</span>${a.name}` +
       (a.badge ? `<span class="badge">${a.badge}</span>` : "");
-    // single click = select only (no more instant open)
+    // single click = OPEN the app (works on desktop, touch, and mobile)
     d.onclick = (e) => {
       e.stopPropagation();
-      document.querySelectorAll(".icon").forEach((x) => x.classList.remove("selected"));
-      d.classList.add("selected");
       hideIconMenu();
-    };
-    // double-click = open. Smiley AI shows Open / Delete choices.
-    d.ondblclick = (e) => {
-      e.stopPropagation();
       if (a.id === "smiley") showSmileyMenu(e.clientX, e.clientY);
       else openApp(a.id);
     };
@@ -2961,6 +2955,8 @@ function hideSmiley() {
 // --- Rival AI pets (Clippy + ByteBuddy): live next to Smiley, argue, steal ---
 let petBusy = false;
 function syncPets() {
+  // clamp helper so AIs never get stuck on screen edges/walls
+  const clampPct = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const s = document.getElementById("smiley");
   const sx = parseFloat(s.style.left) || 82, sy = parseFloat(s.style.top) || 68;
   const c = document.getElementById("petClippy");
@@ -2968,22 +2964,22 @@ function syncPets() {
   const showC = !!ownedApps.dl_clippy, showB = !!ownedApps.dl_byte;
   c.classList.toggle("hidden", !showC);
   b.classList.toggle("hidden", !showB);
-  if (showC && !c.style.left) { c.style.left = Math.max(0, sx - 12) + "%"; c.style.top = Math.min(70, sy + 4) + "%"; }
-  if (showB && !b.style.left) { b.style.left = Math.min(86, sx + 6) + "%"; b.style.top = Math.max(0, sy - 10) + "%"; }
+  if (showC && !c.style.left) { c.style.left = clampPct(sx - 12, 3, 70) + "%"; c.style.top = clampPct(sy + 4, 3, 52) + "%"; }
+  if (showB && !b.style.left) { b.style.left = clampPct(sx + 6, 3, 70) + "%"; b.style.top = clampPct(sy - 10, 3, 52) + "%"; }
   c.querySelector(".pet-face").onclick = () => rivalTalk("clippy");
   b.querySelector(".pet-face").onclick = () => rivalTalk("byte");
   const l = document.getElementById("petLiam");
   const showL = !!ownedApps.liam;
   l.classList.toggle("hidden", !showL);
   if (showL) {
-    if (!l.style.left) { l.style.left = Math.max(0, sx - 6) + "%"; l.style.top = Math.min(70, sy + 10) + "%"; }
+    if (!l.style.left) { l.style.left = clampPct(sx - 6, 3, 70) + "%"; l.style.top = clampPct(sy + 10, 3, 52) + "%"; }
     l.querySelector(".pet-face").onclick = () => liamTalk();
   }
   const sc = document.getElementById("petScythe");
   const showSc = scytheUnlocked && scytheDesktopOn;
   sc.classList.toggle("hidden", !showSc);
   if (showSc) {
-    if (!sc.style.left) { sc.style.left = Math.min(86, sx + 10) + "%"; sc.style.top = Math.max(0, sy - 8) + "%"; }
+    if (!sc.style.left) { sc.style.left = clampPct(sx + 10, 3, 70) + "%"; sc.style.top = clampPct(sy - 8, 3, 52) + "%"; }
     sc.querySelector(".pet-face").onclick = () => petSay("scythe", SCYTHE_JABS[Math.floor(Math.random() * SCYTHE_JABS.length)], 3000);
   }
   if (!b._dragWired) { b._dragWired = true; makeByteDraggable(); }
@@ -3006,8 +3002,8 @@ function makeByteDraggable() {
     };
     const move = (ev) => {
       pet.style.transition = "none";
-      pet.style.left = ((ev.clientX - desk.left - 26) / desk.width) * 100 + "%";
-      pet.style.top = ((ev.clientY - desk.top - 26) / desk.height) * 100 + "%";
+      pet.style.left = Math.max(2, Math.min(86, ((ev.clientX - desk.left - 26) / desk.width) * 100)) + "%";
+      pet.style.top = Math.max(2, Math.min(62, ((ev.clientY - desk.top - 26) / desk.height) * 100)) + "%";
       if (!saidLine) {
         const near = trashRects().some((r) => ev.clientX > r.left - 60 && ev.clientX < r.right + 60 && ev.clientY > r.top - 60 && ev.clientY < r.bottom + 60);
         if (near) {
@@ -3216,7 +3212,7 @@ function petCheckSteal() {
     smileyDirect("HEY!! THAT'S MINE!!", 3000);
     setTimeout(() => {
       const bx = parseFloat(b.style.left) || 0;
-      b.style.left = Math.min(86, bx + 10) + "%";
+      b.style.left = Math.min(70, bx + 10) + "%"; // clamp so Byte can't flee off-screen
       b.style.top = Math.min(70, (parseFloat(b.style.top) || 0) + 4) + "%";
       setTimeout(() => {
         document.getElementById("stolenBoy").classList.add("hidden");
@@ -4117,8 +4113,8 @@ function makeSmileyDraggable() {
     const desk = document.getElementById("desktop").getBoundingClientRect();
     const move = (ev) => {
       pet.style.transition = "none";
-      pet.style.left = ((ev.clientX - desk.left - 26) / desk.width) * 100 + "%";
-      pet.style.top = ((ev.clientY - desk.top - 26) / desk.height) * 100 + "%";
+      pet.style.left = Math.max(2, Math.min(86, ((ev.clientX - desk.left - 26) / desk.width) * 100)) + "%";
+      pet.style.top = Math.max(2, Math.min(62, ((ev.clientY - desk.top - 26) / desk.height) * 100)) + "%";
     };
     const up = (ev) => {
       pet.style.transition = "";
