@@ -1280,3 +1280,31 @@ html, body { touch-action: manipulation; }
 }
 #taskbar { z-index: 60; }
 #startMenu { z-index: 61; }
+
+/* ===== FULL SCREEN: fill the whole viewport on phone + desktop ===== */
+html, body {
+  width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
+}
+#boot, #desktop, #offScreen, #deskScreen, #whiteScreen, #bsod, #demonScreen,
+#boomScreen, #corruptScreen, #rampageScreen, #fireScreen, #waterScreen,
+#aftermath, #verityReboot, #byteEnding, #scytheCall, #callPopup, #hackPanel {
+  width: 100vw !important;
+  height: 100vh;            /* fallback */
+  height: 100dvh;           /* mobile: follows the real visible screen */
+  max-width: none !important;
+  left: 0 !important; top: 0 !important;
+}
+/* fill behind notches / rounded corners on phones */
+#boot, #desktop {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+/* full-screen button */
+#fsBtn { background: #4a5568; color: white; border: 1px solid #888; border-radius: 6px; padding: 6px 10px; }
+@media (max-width: 820px) {
+  #fsBtn { padding: 5px 8px; font-size: 11px; }
+}
+/* body stays locked so nothing scrolls outside the screen */
+body { overscroll-behavior: none; position: fixed; inset: 0; }

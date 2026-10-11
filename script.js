@@ -319,6 +319,19 @@ const DEJAVU_KEY = "smileyAI-dejavu"; // survives even Clear Memory: faint echoe
 let dejavu = 0;
 try { dejavu = parseInt(localStorage.getItem(DEJAVU_KEY) || "0", 10) || 0; } catch (e) {}
 // Absolute fresh start: wipe the save, keep only a faint feeling of deja vu.
+// --- Fullscreen: real full-screen toggle (works desktop + mobile) ---
+function toggleFullscreen() {
+  const d = document.documentElement;
+  try {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      const req = d.requestFullscreen || d.webkitRequestFullscreen;
+      if (req) req.call(d);
+    } else {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exit) exit.call(document);
+    }
+  } catch (e) {}
+}
 function clearMemory() {
   // Revoke everything earned first: admin panel, hacking panel, cash, outfits, memory.
   isAdmin = false;

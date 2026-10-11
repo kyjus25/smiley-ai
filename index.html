@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Smiley AI</title>
-<link rel="stylesheet" href="style.css?v=60" />
+<link rel="stylesheet" href="style.css?v=61" />
 </head>
 <body>
 
@@ -33,6 +33,7 @@
     <p>Welcome to your computer.<br>Open apps, play games, hang out with Smiley.</p>
     <div>
       <button id="powerBtn">▶ Boot Desktop</button>
+      <button onclick="toggleFullscreen()">⛶ Fullscreen</button>
       <button onclick="location.reload()">⟳ Refresh (deletes everything)</button>
     </div>
   </div>
@@ -192,6 +193,7 @@
     <button id="testBtn" class="hidden" onclick="openApp('test')" title="Test Room">🧪</button>
     <button id="closeAllBtn" title="Delete all pop-ups (close all windows)" onclick="closeAllPopups()">✕ pop-ups</button>
     <button id="offBtn" title="Turn off the PC (pause)" onclick="togglePower()">⏻ Off</button>
+    <button id="fsBtn" title="Fullscreen" onclick="toggleFullscreen()">⛶ Full</button>
     <button id="putDownBtn" title="Put down the computer and stare at your desk" onclick="putDown()">✋ Put Down</button>
     <div id="clock">12:00</div>
   </div>
@@ -286,6 +288,6 @@
   </div>
 </div>
 
-<script src="script.js?v=60"></script>
+<script src="script.js?v=61"></script>
 </body>
 </html>
