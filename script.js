@@ -864,7 +864,7 @@ function wireScytheNote() {
   const note = document.getElementById("scytheNote");
   if (!note || note._wired) return;
   note._wired = true;
-  note.onmousedown = (e) => {
+  note.onpointerdown = (e) => {
     e.preventDefault();
     const ox = e.clientX - note.getBoundingClientRect().left;
     const oy = e.clientY - note.getBoundingClientRect().top;
@@ -874,8 +874,8 @@ function wireScytheNote() {
       note.style.top = ev.clientY - oy + "px";
     };
     const up = (ev) => {
-      document.removeEventListener("mousemove", move);
-      document.removeEventListener("mouseup", up);
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", up);
       note.classList.remove("dragging");
       // corner? (within 220px of any viewport corner) -> she gives it all back
       const w = window.innerWidth, h = window.innerHeight;
@@ -883,8 +883,8 @@ function wireScytheNote() {
                      (ev.clientX < 220 && ev.clientY > h - 220) || (ev.clientX > w - 220 && ev.clientY > h - 220);
       if (corner) rescueFromScythe();
     };
-    document.addEventListener("mousemove", move);
-    document.addEventListener("mouseup", up);
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", up);
   };
 }
 // Everything comes back + Scythe gets her own white-hat app.
@@ -1267,7 +1267,7 @@ function renderTasks() {
 }
 function makeDraggable(win, handle) {
   let ox, oy;
-  handle.onmousedown = (e) => {
+  handle.onpointerdown = (e) => {
     ox = e.clientX - win.offsetLeft; oy = e.clientY - win.offsetTop;
     const move = (ev) => {
       const maxX = Math.max(8, document.getElementById("desktop").clientWidth - win.offsetWidth - 8);
@@ -1275,9 +1275,9 @@ function makeDraggable(win, handle) {
       win.style.left = Math.max(-win.offsetWidth + 80, Math.min(ev.clientX - ox, maxX)) + "px";
       win.style.top = Math.max(0, Math.min(ev.clientY - oy, maxY)) + "px";
     };
-    const up = () => { document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up); };
-    document.addEventListener("mousemove", move);
-    document.addEventListener("mouseup", up);
+    const up = () => { document.removeEventListener("pointermove", move); document.removeEventListener("pointerup", up); };
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", up);
   };
 }
 
@@ -2920,7 +2920,7 @@ function syncPets() {
 function makeByteDraggable() {
   const pet = document.getElementById("petByte");
   const face = pet.querySelector(".pet-face");
-  face.onmousedown = (e) => {
+  face.onpointerdown = (e) => {
     e.stopPropagation();
     e.preventDefault();
     const desk = document.getElementById("desktop").getBoundingClientRect();
@@ -2948,16 +2948,16 @@ function makeByteDraggable() {
     };
     const up = (ev) => {
       pet.style.transition = "";
-      document.removeEventListener("mousemove", move);
-      document.removeEventListener("mouseup", up);
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", up);
       const dropped = trashRects().some((r) => ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom);
       if (dropped && ownedApps.dl_byte) {
         deleteIcon("dl_byte");
         smileyDirect("...oh. Okay. Bye, Byte.", 2500);
       }
     };
-    document.addEventListener("mousemove", move);
-    document.addEventListener("mouseup", up);
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", up);
   };
 }
 function petSay(id, text, ms) {
@@ -3376,7 +3376,7 @@ function initPaint() {
     const r = cv.getBoundingClientRect();
     return [(e.clientX - r.left) * (cv.width / r.width), (e.clientY - r.top) * (cv.height / r.height)];
   };
-  cv.onmousedown = (e) => { drawing = true; const [x, y] = pos(e); ctx.beginPath(); ctx.moveTo(x, y); };
+  cv.onpointerdown = (e) => { drawing = true; const [x, y] = pos(e); ctx.beginPath(); ctx.moveTo(x, y); };
   cv.onmousemove = (e) => {
     if (!drawing) return;
     const [x, y] = pos(e);
@@ -3865,7 +3865,7 @@ function smileyTalk() {
 function makeSmileyDraggable() {
   const pet = document.getElementById("smiley");
   const face = document.getElementById("smileyFace");
-  face.onmousedown = (e) => {
+  face.onpointerdown = (e) => {
     e.stopPropagation();
     const desk = document.getElementById("desktop").getBoundingClientRect();
     const move = (ev) => {
@@ -3875,15 +3875,15 @@ function makeSmileyDraggable() {
     };
     const up = (ev) => {
       pet.style.transition = "";
-      document.removeEventListener("mousemove", move);
-      document.removeEventListener("mouseup", up);
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", up);
       // dragged fully off the desktop? He's gone until you open his app.
       const off = ev.clientX < desk.left - 30 || ev.clientX > desk.right + 30 ||
                  ev.clientY < desk.top - 30 || ev.clientY > desk.bottom + 30;
       if (off) smileyVanish();
     };
-    document.addEventListener("mousemove", move);
-    document.addEventListener("mouseup", up);
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", up);
   };
 }
 // Smiley gets dragged off screen and disappears until his app is opened.
