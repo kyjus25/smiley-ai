@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Smiley AI</title>
-<link rel="stylesheet" href="style.css?v=67" />
+<link rel="stylesheet" href="style.css?v=70" />
 </head>
 <body>
 
@@ -79,6 +79,37 @@
 
   <!-- finger/cursor indicator: shows where your mouse or finger is -->
   <div id="fingerCursor">👆</div>
+
+  <!-- MAFIA REVENGE: screen breaks, pixel hand crushes Smiley -->
+  <div id="mafiaScreen" class="hidden">
+    <div class="crack-overlay"></div>
+    <div class="pixel-hand">
+      <div class="hand-palm">
+        <div class="finger f1"></div><div class="finger f2"></div><div class="finger f3"></div><div class="finger f4"></div>
+        <div class="hand-thumb"></div>
+      </div>
+      <div class="held-smiley"><div class="hs-eye l"></div><div class="hs-eye r"></div><div class="hs-mouth"></div></div>
+    </div>
+    <div class="mafia-text" id="mafiaText"></div>
+    <button class="mafia-btn hidden" id="mafiaSellBtn" onclick="startSelling()">🍔 Start selling burgers to survive</button>
+  </div>
+  <!-- BURGER STAND: earn money for a new computer -->
+  <div id="burgerScreen" class="hidden">
+    <div class="burger-stand">
+      <h2>🍔 Burger Stand</h2>
+      <p id="burgerMsg">Tap to grill! Get $10,000 for a new computer.</p>
+      <div class="burger-stats">
+        <span>Cash: $<b id="burgerCash">0</b></span>
+        <span>Goal: $10,000</span>
+      </div>
+      <button class="burger-btn" id="burgerBtn" onclick="sellBurger()">🍔 GRILL!</button>
+      <div class="burger-actions">
+        <button onclick="buyNewComputer()">💻 Buy new computer ($10,000)</button>
+        <button onclick="buySmileyInstaller()">📦 Buy Installer for Smiley ($500)</button>
+        <button onclick="closeBurger()">✕ Close</button>
+      </div>
+    </div>
+  </div>
 
   <!-- rival AI pets: appear right next to Smiley when downloaded -->
   <div id="pets">
@@ -294,6 +325,6 @@
   </div>
 </div>
 
-<script src="script.js?v=67"></script>
+<script src="script.js?v=70"></script>
 </body>
 </html>

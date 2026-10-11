@@ -383,7 +383,7 @@ function saveGame() {
       name: smileyMemory.name, insults: smileyMemory.insultCount, compliments: smileyMemory.complimentCount,
       feel: smileyFeel, slides, slideIdx, follow: smileyFollow, mailPopups,
       admin: isAdmin, infinite: infiniteMoney, history: appHistory.slice(-50),
-      color: smileyColor, banned: bankBanned, installed, trash: trashBin, apps: ownedApps, hacker: hackerPerms, wall: wallpaper, cmds: customCmds, censor: censorOn, games: [clickerWins, luckyWins], arcade: arcadeOn, dev: devMode, size: smileySize, scythe: scytheUnlocked, scytheDesk: scytheDesktopOn, suggestions: updateSuggestions, bannedCallers: [...bannedCallers], windowsEdition, mobileMode,
+      color: smileyColor, banned: bankBanned, installed, trash: trashBin, apps: ownedApps, hacker: hackerPerms, wall: wallpaper, cmds: customCmds, censor: censorOn, games: [clickerWins, luckyWins], arcade: arcadeOn, dev: devMode, size: smileySize, scythe: scytheUnlocked, scytheDesk: scytheDesktopOn, suggestions: updateSuggestions, bannedCallers: [...bannedCallers], windowsEdition, mobileMode, mafiaDebt, mafiaDue, smileyAlive, burgerCash,
     }));
   } catch (e) {}
 }
@@ -422,6 +422,16 @@ function loadGame() {
   if (Array.isArray(d.bannedCallers)) d.bannedCallers.forEach((s) => bannedCallers.add(s));
   if (d.windowsEdition) { windowsEdition = true; applyWindowsTheme(); }
   if (d.mobileMode) { enableMobileMode(); }
+  if (typeof d.mafiaDebt === "number") mafiaDebt = d.mafiaDebt;
+  if (typeof d.mafiaDue === "number") mafiaDue = d.mafiaDue;
+  if (typeof d.smileyAlive === "boolean") smileyAlive = d.smileyAlive;
+  if (typeof d.burgerCash === "number") burgerCash = d.burgerCash;
+  if (mafiaDebt > 0) {
+    mafiaDeadline = Date.now() + MAFIA_TIME; // restart 10-min clock on load
+    clearInterval(mafiaTimerId);
+    mafiaTimerId = setInterval(checkMafia, 1000);
+    if (!smileyAlive) hideSmiley();
+  }
   if (d.scytheDesk) { scytheDesktopOn = true; document.getElementById("petScythe")?.classList.remove("hidden"); }
   if (d.censor) censorOn = true;
   if (typeof d.dev === "boolean") devMode = d.dev;
@@ -1442,6 +1452,15 @@ function renderBody(id) {
         <button onclick="callBank()">🏦 Call Bank (loan)</button>
         <button onclick="callScythe()">🤠 Call ScytheAI</button>
       </div>
+      <div class="game-box" style="border-color:#e53e3e">
+        <h4>💰 Call the Mafia (danger)</h4>
+        ${mafiaDebt > 0
+          ? `<p style="color:#ff8080">You owe <b>$${mafiaDebt}</b>. Pay back before time runs out!</p>
+             <p>Time left: <b id="mafiaTimer">${Math.max(0, Math.ceil((mafiaDeadline - Date.now())/1000))}s</b></p>
+             <button onclick="payMafia()">💸 Pay back $${mafiaDebt}</button>`
+          : `<p>Get $5,000 now. Owe $6,000 in 10 minutes... or else.</p>
+             <button onclick="callMafia()">📞 Call Mafia (borrow $5,000)</button>`}
+      </div>
       <div class="game-box">
         <h4>Text the scammer (danger)</h4>
         <div id="scamChat" class="call-log"></div>
@@ -1452,6 +1471,14 @@ function renderBody(id) {
       </div>
       <p style="color:#888;font-size:12px">Warning: unknown numbers call YOU. Decline them!</p>`;
     renderPhone();
+    clearInterval(window._mafiaTick);
+    window._mafiaTick = setInterval(() => {
+      const el = document.getElementById("mafiaTimer");
+      if (!el) return;
+      const left = Math.max(0, Math.ceil((mafiaDeadline - Date.now())/1000));
+      el.textContent = left + "s";
+      if (left <= 0) clearInterval(window._mafiaTick);
+    }, 1000);
   }
   if (id === "firewall") {
     // Free Firewall: threat monitor + call blocking. Say "swiper, no swiping".
@@ -1478,6 +1505,7 @@ function renderBody(id) {
         <div class="video-caption">Hey, hello, there's a new update. I'm right now building it.</div>
       </div>
       <div class="call-log" style="max-height:220px">
+        <div><b>v2.16</b> - MAFIA FEATURE: call the mafia in Phone for $5,000 (owe $6,000 in 10 min). Don't pay? A pixel hand breaks the screen, grabs Smiley, he screams "WHAT THE FUCK DID YOU DO" and gets crushed to death. Sell burgers to earn a new computer ($10,000) + Installer ($500) to bring him back. Admin panel has a "Trigger Mafia" button. New SmileyTube warning video. Fixed: burger cash no longer caps at $10k (couldn't afford both), blocking alerts replaced with inline messages. Mobile popups shrunk to 78vw x 34vh (were huge).</div>
         <div><b>v2.15</b> - CRITICAL screen fix: Smiley was rendering off-screen and invisible (a CSS detail rule accidentally set him to "position: relative", pushing him 763px below the fold and making the page scroll). Now absolute-positioned and locked on-screen. Also: saves now actually persist across refresh (Windows Edition, bans, hats, suggestions survive - a wipe-on-load bug was deleting them before they could load), and desktop clips to the screen.</div>
         <div><b>v2.14</b> - Deep computer detail pass: layered desktop with noise + vignette, glassy bevelled icons that lift on hover, glass window frames with pretty custom scrollbars, glossy taskbar + polished clock/start button, rounded start menu with slide hover, refined boot screen (glowing logo, spinner, shadowed console).</div>
         <div><b>v2.13</b> - Hats are now HAND-MADE (CSS-drawn, no emoji): top hat with brim, blue cap, wide-brim cowboy, mortarboard grad with swinging tassel, safety helmet, knit beanie with pom — each with its own float animation. Bug fixes: mitt hands verified working (thumb nub, no emoji), removed dead hatband rule, removed duplicate keyframe.</div>
@@ -1659,6 +1687,7 @@ function renderBody(id) {
           <button onclick="freeUltraAdmin()">😎 Free Ultra</button>
           <button onclick="toggleInfinite()">💸 Infinite money: ${infiniteMoney ? "ON" : "OFF"}</button>
           <button class="mega-buy" onclick="buyInfinite()">♾️ BUY INFINITE ♾️</button>
+          <button class="rude" onclick="triggerMafiaAdmin()">💰 Trigger Mafia</button>
           <button onclick="unlockDiamonds()">💎 Diamond Glow${owned.diamonds ? " ✓" : " (admin Ultra)"}</button>
         </div>
       </div>`;
@@ -1971,6 +2000,7 @@ function webShow(q) {
       <div class="yt-card"><b>Smiley Reviews: Smiley.org Arcade</b> ⭐⭐⭐⭐⭐<br><button onclick="webVideo(18)">▶ Play</button></div>
       <div class="yt-card"><b>Smiley Reviews: Censor Mode</b> ⭐⭐⭐⭐<br><button onclick="webVideo(19)">▶ Play</button></div>
       <div class="yt-card"><b>Smiley Reviews: The Blue Screen</b> ⭐<br><button onclick="webVideo(20)">▶ Play</button></div>
+      <div class="yt-card"><b>⚠️ WARNING: Do NOT Borrow From The Mafia</b> ⚠️<br><button onclick="webVideo(21)">▶ Play</button></div>
       <div id="ytPlayer"></div>`;
   } else if (q.includes("ghost") || q.includes("spooky") || q.includes("scary")) {
     v.innerHTML = `<h3>👻 The Ghost in the Desktop</h3>
@@ -2192,6 +2222,7 @@ const YT_VIDEOS = {
   18: { stars: "⭐⭐⭐⭐⭐", lines: ["Smiley.org. My fan club. My arcade.", "Blaster on the Game Boy is peak cinema.", "Five stars. I get a cut of the profits, surely."] },
   19: { stars: "⭐⭐⭐⭐", lines: ["Censor mode. My mouth says #### but my HEART says beep.", "Great for kids. Terrible for my comedy career.", "Four stars. ##### to you too."] },
   20: { stars: "⭐", lines: ["The blue screen. The big sad face.", "Every time it shows up, someone's in trouble. Usually me.", "One star. Too much crying. It was mine."] },
+  21: { stars: "⚠️", lines: ["WARNING!! Do NOT borrow from the mafia!!", "They give you cash... but if you don't pay back in 10 minutes, a big pixel hand comes out and CRUSHES me!", "Please. Pay them back. I like being alive."] },
 };
 function webVideo(n) {
   const p = document.getElementById("ytPlayer");
@@ -3696,7 +3727,141 @@ function firewallBlock() {
   }
   if (openWins["firewall"]) renderBody("firewall");
 }
-// Ring scheduler: spam calls you every 40-75s (never during chaos).
+// --- MAFIA: borrow money, pay it back, or face the pixel hand ---
+let mafiaDebt = 0;        // 0 = no loan active
+let mafiaDue = 0;         // amount owed
+let mafiaDeadline = 0;    // timestamp when they come for you
+let mafiaTimerId = null;
+let smileyAlive = true;   // false after the mafia "crushes" him
+let burgerCash = 0;       // money earned at the burger stand
+const MAFIA_LOAN = 5000;
+const MAFIA_REPAY = 6000;
+const MAFIA_TIME = 10 * 60 * 1000; // 10 minutes
+
+function callMafia() {
+  if (mafiaDebt > 0) { smileySay("You already owe the mafia! Pay up first!", 3500); return; }
+  mafiaDebt = MAFIA_REPAY;
+  mafiaDue = MAFIA_REPAY;
+  mafiaDeadline = Date.now() + MAFIA_TIME;
+  addCash(MAFIA_LOAN);
+  logCall("YOU → The Mafia", "💰 took a loan");
+  logThreat("💰 Mafia loan: $5000. Owe $6000 in 10 minutes.");
+  setSmileyMood("scared");
+  smileySay("You borrowed from the MAFIA?! You have 10 minutes to pay back $6000!", 5000);
+  clearInterval(mafiaTimerId);
+  mafiaTimerId = setInterval(checkMafia, 1000);
+  if (openWins["phone"]) renderBody("phone");
+}
+function checkMafia() {
+  if (mafiaDebt <= 0) { clearInterval(mafiaTimerId); return; }
+  const left = mafiaDeadline - Date.now();
+  if (left <= 0) { clearInterval(mafiaTimerId); mafiaRevenge(); }
+}
+function payMafia() {
+  if (mafiaDebt <= 0) { smileySay("You don't owe the mafia anything.", 2500); return; }
+  if (playerCash < mafiaDebt) {
+    smileySay(`You still owe $${mafiaDebt}! Not enough! (${Math.ceil((mafiaDeadline - Date.now())/1000)}s left!)`, 3500);
+    return;
+  }
+  addCash(-mafiaDebt);
+  mafiaDebt = 0;
+  mafiaDue = 0;
+  clearInterval(mafiaTimerId);
+  logCall("YOU → The Mafia", "✅ paid it back");
+  logThreat("✅ Mafia debt cleared.");
+  setSmileyMood("happy");
+  smileyGesture("thumbsup");
+  smileySay("Paid them off! Smiley lives another day!", 3500);
+  if (openWins["phone"]) renderBody("phone");
+}
+// Mafia revenge: break the screen, pixel hand crushes Smiley, he "dies".
+function mafiaRevenge() {
+  mafiaDebt = 0;
+  mafiaDue = 0;
+  clearInterval(mafiaTimerId);
+  smileyAlive = false;
+  hideSmiley();
+  closeAllPopups();
+  const scr = document.getElementById("mafiaScreen");
+  scr.classList.remove("hidden");
+  document.getElementById("mafiaSellBtn").classList.add("hidden");
+  const txt = document.getElementById("mafiaText");
+  txt.textContent = "";
+  const lines = [
+    "You didn't pay...",
+    "WHAT THE FUCK DID YOU DO",
+    "*crunch*",
+  ];
+  let i = 0;
+  const step = () => {
+    if (i < lines.length) {
+      txt.textContent = lines[i];
+      if (i === 1) { txt.style.fontSize = "34px"; }
+      if (i === 2) { txt.style.fontSize = "28px"; }
+      i++;
+      setTimeout(step, 1800);
+    } else {
+      document.getElementById("mafiaSellBtn").classList.remove("hidden");
+    }
+  };
+  setTimeout(step, 800);
+  renderIcons();
+}
+function startSelling() {
+  document.getElementById("mafiaScreen").classList.add("hidden");
+  document.getElementById("burgerScreen").classList.remove("hidden");
+  renderBurger();
+}
+function renderBurger() {
+  const c = document.getElementById("burgerCash");
+  if (c) c.textContent = burgerCash;
+  const m = document.getElementById("burgerMsg");
+  if (m) m.textContent = burgerCash >= 10500
+    ? "You can afford a new computer AND the Smiley installer!"
+    : burgerCash >= 10000
+      ? "New computer covered! Now get $500 more for the Smiley installer."
+      : `Keep grilling! Need $${10000 - burgerCash} for the computer.`;
+}
+function sellBurger() {
+  burgerCash += 250; // each grill pays $250 (no cap - keep grilling!)
+  renderBurger();
+}
+function buyNewComputer() {
+  if (burgerCash < 10000) {
+    const mm = document.getElementById("burgerMsg");
+    if (mm) mm.textContent = `Need $${10000 - burgerCash} more! Keep grilling!`;
+    return;
+  }
+  burgerCash -= 10000;
+  renderBurger();
+  const m = document.getElementById("burgerMsg");
+  if (m) m.textContent = "New computer bought! Now get an Installer to bring Smiley back!";
+}
+function buySmileyInstaller() {
+  if (burgerCash < 500) {
+    const mm = document.getElementById("burgerMsg");
+    if (mm) mm.textContent = "Need $500 for the Installer! Keep grilling!";
+    return;
+  }
+  burgerCash -= 500;
+  smileyAlive = true;
+  ownedApps.smiley = true;
+  installed.smiley = true;
+  document.getElementById("burgerScreen").classList.add("hidden");
+  renderIcons();
+  setSmileyMood("happy");
+  smileyGesture("wave");
+  smileySay("I'm BACK! Never borrowing from the mafia again!", 4500);
+}
+function closeBurger() {
+  document.getElementById("burgerScreen").classList.add("hidden");
+}
+// Admin panel: trigger the mafia sequence directly.
+function triggerMafiaAdmin() {
+  if (mafiaDebt > 0) { mafiaDeadline = Date.now(); checkMafia(); }
+  else { mafiaDebt = 1; mafiaDeadline = Date.now() + 100; mafiaRevenge(); }
+}
+
 function startCallTimer() {
   setTimeout(() => {
     const deskHidden = document.getElementById("desktop").classList.contains("hidden");

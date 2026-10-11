@@ -1421,3 +1421,80 @@ body.mobile-mode .window[data-app="games"] { height: 46vh !important; max-height
   }
   .window[data-app="games"] { height: 38vh !important; max-height: 46vh !important; }
 }
+
+/* ===== MAFIA: broken screen + pixel hand crushing Smiley ===== */
+#mafiaScreen { position: absolute; inset: 0; z-index: 300; background: #0a0a0a; overflow: hidden; }
+.crack-overlay {
+  position: absolute; inset: 0; z-index: 2;
+  background:
+    linear-gradient(45deg, transparent 47%, rgba(255,255,255,.28) 48%, rgba(255,255,255,.28) 50%, transparent 51%),
+    linear-gradient(75deg, transparent 47%, rgba(255,255,255,.22) 48%, rgba(255,255,255,.22) 50%, transparent 51%),
+    linear-gradient(105deg, transparent 47%, rgba(255,255,255,.18) 48%, rgba(255,255,255,.18) 50%, transparent 51%),
+    linear-gradient(135deg, transparent 47%, rgba(255,255,255,.22) 48%, rgba(255,255,255,.22) 50%, transparent 51%);
+  background-size: 60% 60%, 70% 80%, 80% 70%, 90% 90%;
+  background-position: 10% 15%, 80% 25%, 30% 80%, 70% 70%;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+/* pixel hand (blocky, rises from the bottom holding Smiley) */
+.pixel-hand {
+  position: absolute; bottom: -120px; left: 50%; transform: translateX(-50%);
+  z-index: 3; animation: hand-rise 1.1s cubic-bezier(.2,.8,.3,1.2) forwards;
+}
+@keyframes hand-rise { to { bottom: 28%; } }
+.hand-palm { position: relative; width: 90px; height: 110px; background: #e8b782; border: 4px solid #2a2a2a; border-radius: 16px 16px 8px 8px; image-rendering: pixelated; }
+.hand-palm::after { /* blocky pixel shading */
+  content: ""; position: absolute; inset: 6px;
+  background:
+    linear-gradient(90deg, rgba(0,0,0,.14) 12%, transparent 12% 24%, rgba(0,0,0,.14) 24% 36%, transparent 36% 48%, rgba(0,0,0,.14) 48% 60%, transparent 60% 72%, rgba(0,0,0,.14) 72% 84%, transparent 84%),
+    linear-gradient(0deg, rgba(0,0,0,.10) 12%, transparent 12% 24%, rgba(0,0,0,.10) 24% 36%, transparent 36% 48%, rgba(0,0,0,.10) 48% 60%, transparent 60%);
+  border-radius: 12px;
+}
+.finger { position: absolute; top: -46px; width: 16px; height: 52px; background: #e8b782; border: 3px solid #2a2a2a; border-radius: 8px 8px 4px 4px; }
+.finger.f1 { left: 2px; }
+.finger.f2 { left: 22px; top: -52px; }
+.finger.f3 { left: 42px; top: -52px; }
+.finger.f4 { left: 62px; top: -46px; }
+.hand-thumb { position: absolute; top: 22px; right: -18px; width: 16px; height: 40px; background: #e8b782; border: 3px solid #2a2a2a; border-radius: 8px; transform: rotate(-24deg); }
+/* Smiley being held / crushed */
+.held-smiley {
+  position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+  width: 42px; height: 42px; background: radial-gradient(circle at 35% 30%, #fff6b8, #ffd21f 55%, #f59e00);
+  border: 3px solid #222; border-radius: 50%; z-index: 4;
+  animation: crush 1.4s ease-in 1.2s forwards;
+}
+@keyframes crush {
+  0% { transform: translateX(-50%) scale(1); }
+  60% { transform: translateX(-50%) scale(1.1); }
+  100% { transform: translateX(-50%) scale(1, .25); opacity: .5; }
+}
+.hs-eye { position: absolute; top: 11px; width: 6px; height: 8px; background: #222; border-radius: 50%; }
+.hs-eye.l { left: 8px; } .hs-eye.r { right: 8px; }
+.hs-mouth { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); width: 18px; height: 12px; background: #222; border-radius: 4px; animation: maw .3s steps(2) infinite; }
+@keyframes maw { 50% { height: 6px; } }
+.mafia-text {
+  position: absolute; top: 22%; left: 50%; transform: translateX(-50%); z-index: 5;
+  color: #ff4d4d; font-size: 30px; font-weight: bold; text-align: center;
+  text-shadow: 0 2px 12px red, 0 0 24px red; width: 90%;
+  animation: mflash .4s steps(2) infinite;
+}
+@keyframes mflash { 50% { opacity: .55; } }
+.mafia-btn {
+  position: absolute; bottom: 8%; left: 50%; transform: translateX(-50%); z-index: 6;
+  background: #ff4d4d; color: white; border: none; border-radius: 10px;
+  padding: 14px 22px; font-size: 15px; font-weight: bold;
+}
+
+/* ===== BURGER STAND ===== */
+#burgerScreen { position: absolute; inset: 0; z-index: 310; background: linear-gradient(160deg, #7c3f1d, #4a2312); display: flex; align-items: center; justify-content: center; }
+.burger-stand { text-align: center; color: #fff; max-width: 360px; width: 92vw; }
+.burger-stand h2 { margin: 0 0 8px; }
+.burger-stats { display: flex; justify-content: space-between; margin: 12px 0; background: rgba(0,0,0,.35); border-radius: 8px; padding: 10px; }
+.burger-btn {
+  font-size: 22px; padding: 20px 28px; border: none; border-radius: 14px;
+  background: linear-gradient(180deg, #ffb703, #e08900); color: #4a2312;
+  font-weight: bold; box-shadow: 0 6px 0 #a5620a; cursor: pointer;
+}
+.burger-btn:active { transform: translateY(3px); box-shadow: 0 3px 0 #a5620a; }
+.burger-actions { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.burger-actions button { min-height: 42px; border: none; border-radius: 8px; background: rgba(255,255,255,.9); color: #4a2312; font-weight: bold; }
