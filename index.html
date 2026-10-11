@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Smiley AI</title>
+<link rel="stylesheet" href="style.css?v=43" />
+</head>
+<body>
+
+<!-- BOOT SCREEN - Windows-style booting with settings on the loading screen -->
+<div id="boot">
+  <div class="boot-screen">
+    <div class="win-logo"><span></span><span></span><span></span><span></span></div>
+    <div class="win-boot-text">Starting Windows</div>
+    <div class="spinner"></div>
+    <div id="bootLog"></div>
+    <div class="boot-bar"><div class="boot-fill" id="bootFill"></div></div>
+    <div class="boot-settings">
+      <div><b>Display:</b>
+        <button onclick="setWallpaper('default')">Normal</button>
+        <button onclick="setWallpaper('white')">White</button>
+        <button onclick="setWallpaper('blue')">Blue</button>
+        <button onclick="setWallpaper('purple')">Purple</button>
+        <button onclick="setWallpaper('black')">Black</button>
+      </div>
+      <div><b>Smiley:</b>
+        <button onclick="applySmileyDetail('low')">Low</button>
+        <button onclick="applySmileyDetail('normal')">Normal</button>
+        <button id="bootMusicBtn" onclick="toggleMusic()">Music: off</button>
+      </div>
+    </div>
+    <p>Welcome to your computer.<br>Open apps, play games, hang out with Smiley.</p>
+    <div>
+      <button id="powerBtn">▶ Boot Desktop</button>
+      <button onclick="location.reload()">⟳ Refresh (deletes everything)</button>
+    </div>
+  </div>
+</div>
+
+<!-- DESKTOP -->
+<div id="desktop" class="hidden">
+  <div id="icons"></div>
+  <div id="windows"></div>
+
+  <!-- Smiley AI desktop pet - cute normal round smiley ball -->
+  <div id="smiley" class="hidden">
+    <div id="smileyBubble" class="hidden"></div>
+    <div id="smileyHat" class="hidden">🎩</div>
+    <div id="smileyFace" data-mood="normal" data-detail="normal" data-outfit="none" title="Smiley AI - click to talk, drag to move">
+      <div class="s-ear left"></div>
+      <div class="s-ear right"></div>
+      <div class="s-pixel"></div>
+      <div class="s-freckle f1"></div>
+      <div class="s-freckle f2"></div>
+      <div class="s-freckle f3"></div>
+      <div class="s-freckle f4"></div>
+      <div class="s-shine"></div>
+      <div class="s-cheek left"></div>
+      <div class="s-cheek right"></div>
+      <div class="s-diamond d1"></div>
+      <div class="s-diamond d2"></div>
+      <div class="s-diamond d3"></div>
+      <div class="s-eyes">
+        <div class="s-eye left"><div class="s-pupil"></div><div class="s-sparkle"></div></div>
+        <div class="s-eye right"><div class="s-pupil"></div><div class="s-sparkle"></div></div>
+      </div>
+      <div class="s-mouth"><div class="s-tongue"></div></div>
+      <div class="s-shadow"></div>
+      <!-- little pop-up hands: hidden unless gesturing (wave / point / thumbs up / down) -->
+      <div id="handL" class="s-hand left hidden">👋</div>
+      <div id="handR" class="s-hand right hidden">👋</div>
+    </div>
+  </div>
+
+  <!-- rival AI pets: appear right next to Smiley when downloaded -->
+  <div id="pets">
+    <div id="petClippy" class="pet hidden"><div class="pet-bub hidden"></div><div class="pet-face clippy-face"><div class="c-eye l"></div><div class="c-eye r"></div><div class="c-mouth"></div></div><div class="pet-name">Clippy</div></div>
+    <div id="petByte" class="pet hidden"><div class="pet-bub hidden"></div><div class="pet-face byte-face"><div class="b-antenna"></div><div class="b-eye l"></div><div class="b-eye r"></div><div class="b-mouth"></div></div><div class="pet-name">Byte</div><div id="stolenBoy" class="hidden">🎮</div></div>
+    <div id="petLiam" class="pet hidden"><div class="pet-bub hidden"></div><div class="pet-face liam-face"><div class="li-eye l"></div><div class="li-eye r"></div><div class="li-mouth"></div></div><div class="pet-name">Liam</div></div>
+    <div id="petScythe" class="pet hidden"><div class="pet-bub hidden"></div><div class="pet-face scythe-face"><div class="s-hat"></div><div class="sc-eye l"></div><div class="sc-eye r"></div><div class="sc-mouth"></div></div><div class="pet-name">Scythe</div></div>
+  </div>
+
+  <!-- VERITY MODE: fake hack + blue screen + demonic Smiley -->
+  <div id="hackText" class="hidden"></div>
+  <div id="bsod" class="hidden">
+    <div class="bsod-box">
+      <div style="font-size:80px;">:(</div>
+      <h2>Your PC ran into a problem and needs to restart.</h2>
+      <p>We're just collecting some error info, and then we'll restart for you.</p>
+      <p style="font-size:12px;">For more information visit https://www.windows.com/stopcode<br>Stop code: VERITY.EXE</p>
+    </div>
+  </div>
+  <div id="verityReboot" class="hidden">
+    <div class="verity-card">
+      <p>Smiley is waiting.</p>
+      <button onclick="endVerity()">[ Reboot computer ]</button>
+    </div>
+  </div>
+  <!-- DELETE SMILEY MODE: blue screen with animated AI text (no blah blah) -->
+  <div id="deleteScreen" class="hidden">
+    <div class="bsod-box">
+      <div style="font-size:60px;">:(</div>
+      <h2>Pixel OS ran into a problem</h2>
+      <div id="deleteType"></div>
+      <button id="deleteReboot" class="hidden" onclick="endDeleteSmiley()">[ ??? Reboot ]</button>
+    </div>
+  </div>
+  <!-- SMILEY RAMPAGE: angry Smiley uses root commands to delete your computer -->
+  <div id="rampageScreen" class="hidden">
+    <div class="bsod-box">
+      <div style="font-size:60px;">😠</div>
+      <h2>DELETED BY SMILEY</h2>
+      <div id="rampageType"></div>
+      <button id="rampageReboot" class="hidden" onclick="endSmileyRampage()">[ ??? Reboot ]</button>
+    </div>
+  </div>
+  <div id="demonScreen" class="hidden">
+    <div class="demon-box">
+      <div id="demonFace" data-mood="demonic">
+        <div class="s-eyes">
+          <div class="s-eye left"><div class="s-pupil"></div></div>
+          <div class="s-eye right"><div class="s-pupil"></div></div>
+        </div>
+        <div class="s-mouth"></div>
+      </div>
+      <p id="demonText">Why did you say his name?</p>
+      <button onclick="endVerity()">[ click to reboot ]</button>
+    </div>
+  </div>
+  <!-- fire alarm aftermath: reboot button -->
+  <div id="fireScreen" class="hidden">
+    <div class="boom-box">
+      <div style="font-size:60px;">🧯</div>
+      <h2>FIRE ALARM PULLED.</h2>
+      <p>Everything donated to the fire.</p>
+      <button onclick="rebootFire()">[ Reboot ]</button>
+    </div>
+  </div>
+  <!-- sprinkler rain inside the room -->
+  <div id="sprinkler" class="hidden"></div>
+  <!-- water damage shutdown -->
+  <div id="waterScreen" class="hidden">
+    <div class="boom-box">
+      <div style="font-size:60px;">💧</div>
+      <h2>Water damaged, shutting down</h2>
+    </div>
+  </div>
+  <div id="flash"></div>
+  <!-- Byte farewell secret ending -->
+  <div id="byteEnding" class="hidden">
+    <div class="boom-box">
+      <div style="font-size:50px;">🤖🏠</div>
+      <div id="byteEndingText"></div>
+      <button onclick="endByteEnding()">[ Continue ]</button>
+    </div>
+  </div>
+  <!-- Scythe aftermath: cyan display, black letters (drag the note to a corner to undo it) -->
+  <div id="aftermath" class="hidden">
+    <div class="aftermath-box">
+      <h2 id="scytheNote" title="grab me... drag me to a corner...">Sorry! I got everything!</h2>
+      <p>- ScytheAI</p>
+      <p class="aftermath-hint">The note feels loose. Maybe drag it into a corner?</p>
+      <button onclick="location.reload()">[ Start over ]</button>
+    </div>
+  </div>
+  <!-- hostile hack: plain white display + forced Delete All panel -->
+  <div id="whiteScreen" class="hidden"></div>
+  <div id="hackPanel" class="hidden">
+    <div class="hack-panel-box">
+      <h3>SMILEY.EXE</h3>
+      <p>Taking over...</p>
+      <button id="deleteAllBtn">Delete All</button>
+    </div>
+  </div>
+  <div id="boomScreen" class="hidden">
+    <div class="boom-box">
+      <div style="font-size:60px;">💥</div>
+      <h2>Valuable AI gone.</h2>
+      <p>The computer crashed.</p>
+      <button onclick="endBoom()">[ Reboot ]</button>
+    </div>
+  </div>
+
+  <!-- TASKBAR -->
+  <div id="taskbar">
+    <button id="startBtn">☰ Start</button>
+    <div id="taskItems"></div>
+    <div id="cashHud" title="Fake cash - earn it in Games">💰 $5000</div>
+    <button id="gbBtn" onclick="quickArcade()" title="Game Boy - quick play for Smiley">🎮</button>
+    <button id="scytheRunner" class="hidden" onclick="scytheRun()" title="ScytheAI runner">😱 ScytheAI runner</button>
+    <button id="testBtn" class="hidden" onclick="openApp('test')" title="Test Room">🧪</button>
+    <button id="closeAllBtn" title="Delete all pop-ups (close all windows)" onclick="closeAllPopups()">✕ pop-ups</button>
+    <button id="offBtn" title="Turn off the PC (pause)" onclick="togglePower()">⏻ Off</button>
+    <button id="putDownBtn" title="Put down the computer and stare at your desk" onclick="putDown()">✋ Put Down</button>
+    <div id="clock">12:00</div>
+  </div>
+  <!-- Steam Support rescue: 7-second window during hacks -->
+  <button id="sosBtn" class="hidden" onclick="steamRescue()">🆘 STEAM SUPPORT - say HELP! (<span id="sosN">7</span>s)</button>
+  <!-- ScytheAI phone call overlay -->
+  <div id="scytheCall" class="hidden">
+    <div class="scythe-box">
+      <h3>🤠 ScytheAI on the line...</h3>
+      <div id="scytheChat"></div>
+      <button onclick="hangUpScythe(false)">Hang up</button>
+    </div>
+  </div>
+  <!-- right-click / double-click icon menu (delete icons, delete Smiley AI) -->
+  <div id="iconMenu" class="hidden"></div>
+  <!-- binary downstream rain for hack mode -->
+  <div id="matrix" class="hidden"></div>
+  <!-- Incoming spam call popup -->
+  <div id="callPopup" class="hidden">
+    <div class="call-box">
+      <div class="call-ring">📞</div>
+      <div id="callFrom">Unknown Number</div>
+      <p>Incoming call... answer?</p>
+      <div>
+        <button id="callAnswer" onclick="answerCall()">Answer</button>
+        <button id="callDecline" onclick="declineCall()">Decline</button>
+        <button id="callBan" onclick="banCaller()">🚫 Ban</button>
+      </div>
+    </div>
+  </div>
+  <!-- Corrupted PC screen (answered spam without Ultra/Admin) -->
+  <div id="corruptScreen" class="hidden">
+    <div class="bsod-box">
+      <div style="font-size:60px;">☠️</div>
+      <h2>PC CORRUPTED</h2>
+      <div id="corruptType"></div>
+      <button id="corruptReboot" class="hidden" onclick="endCorrupt()">[ Reboot ]</button>
+    </div>
+  </div>
+  <!-- PC OFF pause screen: Smiley peeks over the corner -->
+  <div id="offScreen" class="hidden">
+    <div class="off-box">
+      <div style="font-size:50px;">💤</div>
+      <h2>PC OFF - paused</h2>
+      <p>Everything is taking a nap.</p>
+      <button onclick="togglePower()">⏻ Turn back on</button>
+    </div>
+  </div>
+  <!-- PUT DOWN: a normal room - you step away and stare at your desk -->
+  <div id="deskScreen" class="hidden">
+    <div class="room-wall"></div>
+    <div class="room-window"><div class="room-sun"></div></div>
+    <div class="room-poster">HANG<br>IN<br>THERE</div>
+    <div class="room-alarm" onclick="pullFireAlarm()" title="pull it... if you dare">🔥<br>FIRE</div>
+    <div class="room-dim hidden" id="roomDim"></div>
+    <div class="room-floor"></div>
+    <div class="room-rug"></div>
+    <div class="room-desk">
+      <div class="rm-coffee" id="roomCoffee" onclick="sipCoffee()" title="sip the coffee"><div class="steam s1"></div><div class="steam s2"></div><div class="steam s3"></div><div class="cup"></div></div>
+      <div class="rm-papers"><div class="sheet p1"></div><div class="sheet p2"></div><div class="sheet p3"></div></div>
+      <div class="rm-pc"><div class="rm-screen"><div class="rm-bubble">come back!</div><div class="rm-smiley"><div class="rm-eye l"></div><div class="rm-eye r"></div><div class="rm-grin"></div><div class="rm-fist f1"></div><div class="rm-fist f2"></div></div></div><div class="rm-base"></div></div>
+      <div class="rm-plant"><div class="leaf l1"></div><div class="leaf l2"></div><div class="leaf l3"></div><div class="pot"></div></div>
+    </div>
+    <div class="room-pets" id="roomPets"></div>
+    <div class="desk-hand">🤚</div>
+    <div class="room-caption">
+      <h2>Computer: put down.</h2>
+      <p id="deskLine">You're looking at your room...</p>
+      <button onclick="pickUp()">🖐️ Pick back up</button>
+    </div>
+  </div>
+  <div id="startMenu" class="hidden">
+    <button data-app="files">📁 Files</button>
+    <button data-app="mail">📧 Mail</button>
+    <button data-app="terminal">⌨️ Terminal</button>
+    <button data-app="browser">🌐 Browser</button>
+    <button data-app="paint">🎨 Paint</button>
+    <button data-app="slides">📊 Slides</button>
+    <button data-app="games">🎮 Games</button>
+    <button data-app="phone">📞 Phone</button>
+    <button data-app="firewall">🧱 Firewall</button>
+    <button data-app="updates">📋 Updates</button>
+    <button data-app="smiley">🙂 Smiley AI</button>
+    <button data-app="settings">⚙️ Settings</button>
+    <button data-app="installer">📦 Installer</button>
+    <button data-app="trash">🗑️ Trash</button>
+    <button data-app="dl_clippy">📎 ClippyPlus</button>
+    <button data-app="dl_byte">🤖 ByteBuddy</button>
+    <button data-app="smileyorg">🌟 Smiley.org</button>
+    <button data-app="liam">🧠 Liam AI</button>
+    <button data-app="admin" id="startAdmin" class="hidden">🛡️ Admin</button>
+  </div>
+</div>
+
+<script src="script.js?v=57"></script>
+</body>
+</html>
