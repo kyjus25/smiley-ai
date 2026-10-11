@@ -1505,6 +1505,7 @@ function renderBody(id) {
         <div class="video-caption">Hey, hello, there's a new update. I'm right now building it.</div>
       </div>
       <div class="call-log" style="max-height:220px">
+        <div><b>v2.18</b> - Cinematic mafia death: the man SQUEEZES Smiley to crush him (fingers clench, thumb closes), blood splatters, then the broken screen SLIDES OFF revealing a burger grill scene with flickering flames and rising smoke. Smiley's death is now fully animated.</div>
         <div><b>v2.17</b> - Mafia aftermath deepened: Smiley dies with a BLOOD SPLATTER burst, the pixel hand is much bigger, the mafia takes ALL your apps (you have nothing until you reinstall, just like Smiley), and reviving him brings everything back with a mixed reaction - overjoyed to be alive, then MAD at you. Fixed: burger cash no longer caps at $10k (couldn't afford both), blocking alerts replaced with inline messages.</div>
         <div><b>v2.16</b> - MAFIA FEATURE: call the mafia in Phone for $5,000 (owe $6,000 in 10 min). Don't pay? A pixel hand breaks the screen, grabs Smiley, he screams "WHAT THE FUCK DID YOU DO" and gets crushed to death. Sell burgers to earn a new computer ($10,000) + Installer ($500) to bring him back. Admin panel has a "Trigger Mafia" button. New SmileyTube warning video. Fixed: burger cash no longer caps at $10k (couldn't afford both), blocking alerts replaced with inline messages. Mobile popups shrunk to 78vw x 34vh (were huge).</div>
         <div><b>v2.15</b> - CRITICAL screen fix: Smiley was rendering off-screen and invisible (a CSS detail rule accidentally set him to "position: relative", pushing him 763px below the fold and making the page scroll). Now absolute-positioned and locked on-screen. Also: saves now actually persist across refresh (Windows Edition, bans, hats, suggestions survive - a wipe-on-load bug was deleting them before they could load), and desktop clips to the screen.</div>
@@ -3791,11 +3792,19 @@ function mafiaRevenge() {
   });
   renderIcons();
   const scr = document.getElementById("mafiaScreen");
-  scr.classList.remove("hidden");
+  scr.classList.remove("hidden", "slide-off"); // reset so it can replay
+  const handReset = scr.querySelector(".pixel-hand");
+  const heldReset = scr.querySelector(".held-smiley");
+  if (handReset) handReset.classList.remove("squeeze");
+  if (heldReset) heldReset.classList.remove("squeeze");
+  const bloodReset = document.getElementById("bloodSplatter");
+  if (bloodReset) bloodReset.classList.remove("splatter");
   document.getElementById("mafiaSellBtn").classList.add("hidden");
   const txt = document.getElementById("mafiaText");
   txt.textContent = "";
   const blood = document.getElementById("bloodSplatter");
+  const hand = scr.querySelector(".pixel-hand");
+  const held = scr.querySelector(".held-smiley");
   const lines = [
     "You didn't pay...",
     "WHAT THE FUCK DID YOU DO",
@@ -3808,12 +3817,19 @@ function mafiaRevenge() {
       if (i === 1) { txt.style.fontSize = "34px"; }
       if (i === 2) {
         txt.style.fontSize = "28px";
-        if (blood) { blood.classList.remove("hidden"); blood.classList.add("splatter"); } // blood burst on death
+        if (blood) { blood.classList.remove("hidden"); blood.classList.add("splatter"); } // blood burst
+        if (hand) hand.classList.add("squeeze"); // the man squeezes to crush him
+        if (held) held.classList.add("squeeze");
       }
       i++;
       setTimeout(step, 1800);
     } else {
-      document.getElementById("mafiaSellBtn").classList.remove("hidden");
+      // broken screen slides off, revealing the burger grill scene
+      scr.classList.add("slide-off");
+      setTimeout(() => {
+        document.getElementById("mafiaSellBtn").classList.remove("hidden");
+        startSelling(); // reveal the grill / burger stand
+      }, 1150);
     }
   };
   setTimeout(step, 800);
