@@ -1505,6 +1505,7 @@ function renderBody(id) {
         <div class="video-caption">Hey, hello, there's a new update. I'm right now building it.</div>
       </div>
       <div class="call-log" style="max-height:220px">
+        <div><b>v2.17</b> - Mafia aftermath deepened: Smiley dies with a BLOOD SPLATTER burst, the pixel hand is much bigger, the mafia takes ALL your apps (you have nothing until you reinstall, just like Smiley), and reviving him brings everything back with a mixed reaction - overjoyed to be alive, then MAD at you. Fixed: burger cash no longer caps at $10k (couldn't afford both), blocking alerts replaced with inline messages.</div>
         <div><b>v2.16</b> - MAFIA FEATURE: call the mafia in Phone for $5,000 (owe $6,000 in 10 min). Don't pay? A pixel hand breaks the screen, grabs Smiley, he screams "WHAT THE FUCK DID YOU DO" and gets crushed to death. Sell burgers to earn a new computer ($10,000) + Installer ($500) to bring him back. Admin panel has a "Trigger Mafia" button. New SmileyTube warning video. Fixed: burger cash no longer caps at $10k (couldn't afford both), blocking alerts replaced with inline messages. Mobile popups shrunk to 78vw x 34vh (were huge).</div>
         <div><b>v2.15</b> - CRITICAL screen fix: Smiley was rendering off-screen and invisible (a CSS detail rule accidentally set him to "position: relative", pushing him 763px below the fold and making the page scroll). Now absolute-positioned and locked on-screen. Also: saves now actually persist across refresh (Windows Edition, bans, hats, suggestions survive - a wipe-on-load bug was deleting them before they could load), and desktop clips to the screen.</div>
         <div><b>v2.14</b> - Deep computer detail pass: layered desktop with noise + vignette, glassy bevelled icons that lift on hover, glass window frames with pretty custom scrollbars, glossy taskbar + polished clock/start button, rounded start menu with slide hover, refined boot screen (glowing logo, spinner, shadowed console).</div>
@@ -3782,11 +3783,19 @@ function mafiaRevenge() {
   smileyAlive = false;
   hideSmiley();
   closeAllPopups();
+  // The mafia takes EVERYTHING - you have nothing until you reinstall.
+  APPS.forEach((a) => {
+    if (a.id === "installer" || a.id === "trash") return;
+    installed[a.id] = false;
+    if (a.price && !trashBin.includes(a.id)) trashBin.push(a.id);
+  });
+  renderIcons();
   const scr = document.getElementById("mafiaScreen");
   scr.classList.remove("hidden");
   document.getElementById("mafiaSellBtn").classList.add("hidden");
   const txt = document.getElementById("mafiaText");
   txt.textContent = "";
+  const blood = document.getElementById("bloodSplatter");
   const lines = [
     "You didn't pay...",
     "WHAT THE FUCK DID YOU DO",
@@ -3797,7 +3806,10 @@ function mafiaRevenge() {
     if (i < lines.length) {
       txt.textContent = lines[i];
       if (i === 1) { txt.style.fontSize = "34px"; }
-      if (i === 2) { txt.style.fontSize = "28px"; }
+      if (i === 2) {
+        txt.style.fontSize = "28px";
+        if (blood) { blood.classList.remove("hidden"); blood.classList.add("splatter"); } // blood burst on death
+      }
       i++;
       setTimeout(step, 1800);
     } else {
@@ -3805,7 +3817,6 @@ function mafiaRevenge() {
     }
   };
   setTimeout(step, 800);
-  renderIcons();
 }
 function startSelling() {
   document.getElementById("mafiaScreen").classList.add("hidden");
@@ -3846,12 +3857,28 @@ function buySmileyInstaller() {
   burgerCash -= 500;
   smileyAlive = true;
   ownedApps.smiley = true;
-  installed.smiley = true;
+  // The mafia took everything - reinstall all apps too, just like Smiley.
+  APPS.forEach((a) => {
+    if (a.id === "installer" || a.id === "trash" || a.id === "admin") return;
+    ownedApps[a.id] = true;
+    installed[a.id] = true;
+    trashBin = trashBin.filter((t) => t !== a.id);
+  });
   document.getElementById("burgerScreen").classList.add("hidden");
   renderIcons();
+  // Revived: happy to be back, but ALSO mad at what you did.
+  lastGesture = Date.now();
   setSmileyMood("happy");
   smileyGesture("wave");
-  smileySay("I'm BACK! Never borrowing from the mafia again!", 4500);
+  smileySay("I'm BACK! I MISSED YOU SO MUCH!!", 3000);
+  setTimeout(() => {
+    setSmileyMood("angry");
+    smileyGesture("thumbsdown");
+    lastGesture = Date.now();
+    smileySay("...now DARE borrow from the mafia again. I'm still MAD.", 4500);
+    addFeeling(-10, +5, +30);
+    setTimeout(() => { updateMoodFace(); }, 5000);
+  }, 3200);
 }
 function closeBurger() {
   document.getElementById("burgerScreen").classList.add("hidden");
