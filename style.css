@@ -261,7 +261,6 @@ button { cursor: pointer; font-family: inherit; }
 .s-hand.pop { animation: hand-pop .3s ease-out; }
 @keyframes hand-pop { 0% { transform: scale(0); } 70% { transform: scale(1.25); } 100% { transform: scale(1); } }
 .s-hand.wave { animation: hand-wave .4s ease-in-out infinite; }
- 50% { transform: rotate(22deg); } }
 .s-hand.point { transform: rotate(0); }
 .s-hand.thumb { animation: thumb-nod .5s ease-in-out 3; }
 @keyframes thumb-nod { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
@@ -1608,4 +1607,42 @@ body.mobile-mode .window[data-app="games"] { height: 46vh !important; max-height
   }
   .window[data-app="games"] { height: 42vh !important; max-height: 50vh !important; }
   .win-body { overflow-y: auto; }
+}
+
+/* ===== MOBILE BUGFIX: hard size caps + no overflow (popups can never be huge) ===== */
+.window, .call-box, .scythe-box, .bsod-box, .boom-box, .aftermath-box,
+.burger-stand, .win-body, .game-box, .shop-row {
+  box-sizing: border-box;
+}
+.window {
+  max-width: 520px !important;
+  max-height: 520px !important;
+}
+/* overlays fill the screen without causing horizontal scroll */
+#boot, #desktop, #mafiaScreen, #burgerScreen, #offScreen, #deskScreen,
+#whiteScreen, #bsod, #demonScreen, #boomScreen, #corruptScreen,
+#rampageScreen, #fireScreen, #waterScreen, #aftermath, #byteEnding {
+  width: 100% !important; max-width: 100% !important; box-sizing: border-box;
+}
+@media (max-width: 820px) {
+  .window {
+    width: 86% !important; max-width: 92% !important;
+    height: 46vh !important; max-height: 62vh !important;
+  }
+  .window[data-app="games"] { height: 56vh !important; max-height: 68vh !important; }
+  .win-body { padding: 8px; }
+  .win-body input, .win-body button, .shop-row button, .game-box button {
+    min-height: 38px; padding: 8px 10px;
+  }
+  #taskbar > * { min-height: 36px; }
+}
+
+/* ===== BULLETPROOF popup cap: beats every window rule incl. mobile/windows mode ===== */
+body.mobile-mode .window,
+#desktop.windows-mode .window,
+#desktop .window,
+.window {
+  max-width: 520px !important;
+  max-height: 480px !important;
+  box-sizing: border-box;
 }
