@@ -180,7 +180,7 @@ button { cursor: pointer; font-family: inherit; }
   position: absolute; z-index: 50; transition: left 1.2s ease-in-out, top 1.2s ease-in-out;
   display: flex; flex-direction: column; align-items: center;
 }
-#smileyFace {
+:is(.smiley-face, .so-face) {
   width: 68px; height: 68px;
   background: radial-gradient(circle at 35% 30%, #fff9c2, #ffd21f 52%, #f59e00);
   border: 3px solid #222; border-radius: 50%;
@@ -212,44 +212,60 @@ button { cursor: pointer; font-family: inherit; }
 /* classic 🙂 smile */
 .s-mouth { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); width: 32px; height: 11px; border: 3px solid #222; border-top: none; border-radius: 2px 2px 24px 24px; background: transparent; transition: all .15s; }
 /* talking: jaw opens downward from the top, teeth pinned at the top */
-#smileyFace.talking .s-mouth { height: 12px; background: #7c2d12; border-radius: 8px 8px 12px 12px; border-top: 3px solid #222; }
+:is(.smiley-face, .so-face).talking .s-mouth { height: 12px; background: #7c2d12; border-radius: 8px 8px 12px 12px; border-top: 3px solid #222; }
 /* white teeth: drop in only while the jaw is open (talking/happy grins), never at rest */
 /* soft ground shadow */
 .s-shadow { position: absolute; bottom: -19px; left: 50%; transform: translateX(-50%); width: 44px; height: 9px; background: rgba(0,0,0,.25); border-radius: 50%; animation: shadow 2.4s ease-in-out infinite; }
 @keyframes shadow { 0%,100% { transform: translateX(-50%) scale(1); opacity: .8; } 30% { transform: translateX(-50%) scale(.8); opacity: .5; } 60% { transform: translateX(-50%) scale(1.05); opacity: .8; } }
 /* moods */
-#smileyFace[data-mood="happy"] .s-mouth { height: 18px; background: #7c2d12; border-radius: 8px 8px 16px 16px; border-top: 3px solid #222; }
-#smileyFace[data-mood="happy"] { background: radial-gradient(circle at 35% 30%, #fff8c0, #ffe45e 55%, #f5c400); }
-#smileyFace[data-mood="worried"] .s-mouth { width: 14px; height: 10px; border-radius: 50%; border: 3px solid #222; background: #7c2d12; }
-#smileyFace[data-mood="scared"] { background: #fff3bf; }
-#smileyFace[data-mood="scared"] .s-eye { height: 20px; }
-#smileyFace[data-mood="scared"] .s-mouth { width: 16px; height: 16px; border-radius: 50%; background: #111; }
-#smileyFace[data-mood="cool"] .s-eye { background: #222; }
-#smileyFace[data-mood="cool"] .s-pupil { display: none; }
-#smileyFace[data-mood="cool"] .s-mouth { border-radius: 0; height: 4px; border: none; border-bottom: 4px solid #222; }
+:is(.smiley-face, .so-face)[data-mood="happy"] .s-mouth { height: 18px; background: #7c2d12; border-radius: 8px 8px 16px 16px; border-top: 3px solid #222; }
+:is(.smiley-face, .so-face)[data-mood="happy"] { background: radial-gradient(circle at 35% 30%, #fff8c0, #ffe45e 55%, #f5c400); }
+:is(.smiley-face, .so-face)[data-mood="worried"] .s-mouth { width: 14px; height: 10px; border-radius: 50%; border: 3px solid #222; background: #7c2d12; }
+:is(.smiley-face, .so-face)[data-mood="scared"] { background: #fff3bf; }
+:is(.smiley-face, .so-face)[data-mood="scared"] .s-eye { height: 20px; }
+:is(.smiley-face, .so-face)[data-mood="scared"] .s-mouth { width: 16px; height: 16px; border-radius: 50%; background: #111; }
+/* COOL: just sunglasses + a smirk */
+:is(.smiley-face, .so-face)[data-mood="cool"] .s-eyes { gap: 3px; top: 12px; }
+:is(.smiley-face, .so-face)[data-mood="cool"] .s-eyes::before {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 12px; height: 3px;
+  background: #141414; border-radius: 2px; transform: translate(-50%, -50%); z-index: 2;
+}
+:is(.smiley-face, .so-face)[data-mood="cool"] .s-eye {
+  width: 18px; height: 13px; background: #161616; border: 2px solid #0a0a0a;
+  border-radius: 5px; animation: none;
+}
+:is(.smiley-face, .so-face)[data-mood="cool"] .s-pupil { display: none; }
+:is(.smiley-face, .so-face)[data-mood="cool"] .s-sparkle {
+  left: 3px; top: 2px; width: 6px; height: 3px; border-radius: 50%; transform: rotate(-20deg);
+}
+:is(.smiley-face, .so-face)[data-mood="cool"] .s-mouth {
+  width: 24px; height: 9px; border: none; border-bottom: 3px solid #222;
+  border-radius: 0 0 16px 0; background: transparent;
+  transform: translateX(-50%) rotate(-10deg);
+}
 /* NEW emotions: sadness, concern, anger */
-#smileyFace[data-mood="sad"] { background: radial-gradient(circle at 35% 30%, #dbeafe, #a9c6f5 60%, #7d9bd6); }
-#smileyFace[data-mood="sad"] .s-eye { height: 15px; }
-#smileyFace[data-mood="sad"] .s-pupil { top: 6px; }
-#smileyFace[data-mood="sad"] .s-mouth { width: 24px; height: 12px; border: 3px solid #222; border-bottom: none; border-radius: 16px 16px 0 0; background: transparent; bottom: 10px; }
-#smileyFace[data-mood="sad"] .s-cheek { background: rgba(120,150,255,.5); }
-#smileyFace[data-mood="concerned"] .s-eye.left { transform: rotate(-8deg); }
-#smileyFace[data-mood="concerned"] .s-eye.right { transform: rotate(8deg); height: 21px; }
-#smileyFace[data-mood="concerned"] .s-mouth { width: 18px; height: 6px; border: 3px solid #222; border-radius: 6px; background: transparent; }
-#smileyFace[data-mood="angry"] { background: radial-gradient(circle at 35% 30%, #ffc9a8, #ff8a5c 55%, #e0521f); }
-#smileyFace[data-mood="angry"] .s-eye { height: 14px; background: white; }
-#smileyFace[data-mood="angry"] .s-eye.left { transform: rotate(18deg); }
-#smileyFace[data-mood="angry"] .s-eye.right { transform: rotate(-18deg); }
-#smileyFace[data-mood="angry"] .s-pupil { background: #7a0d0d; }
-#smileyFace[data-mood="angry"] .s-mouth { width: 26px; height: 10px; border: 3px solid #222; border-bottom: none; border-radius: 12px 12px 0 0; background: #5b0b0b; bottom: 10px; }
-#smileyFace[data-mood="angry"] .s-cheek { background: rgba(200,30,30,.5); }
+:is(.smiley-face, .so-face)[data-mood="sad"] { background: radial-gradient(circle at 35% 30%, #dbeafe, #a9c6f5 60%, #7d9bd6); }
+:is(.smiley-face, .so-face)[data-mood="sad"] .s-eye { height: 15px; }
+:is(.smiley-face, .so-face)[data-mood="sad"] .s-pupil { top: 6px; }
+:is(.smiley-face, .so-face)[data-mood="sad"] .s-mouth { width: 24px; height: 12px; border: 3px solid #222; border-bottom: none; border-radius: 16px 16px 0 0; background: transparent; bottom: 10px; }
+:is(.smiley-face, .so-face)[data-mood="sad"] .s-cheek { background: rgba(120,150,255,.5); }
+:is(.smiley-face, .so-face)[data-mood="concerned"] .s-eye.left { transform: rotate(-8deg); }
+:is(.smiley-face, .so-face)[data-mood="concerned"] .s-eye.right { transform: rotate(8deg); height: 21px; }
+:is(.smiley-face, .so-face)[data-mood="concerned"] .s-mouth { width: 18px; height: 6px; border: 3px solid #222; border-radius: 6px; background: transparent; }
+:is(.smiley-face, .so-face)[data-mood="angry"] { background: radial-gradient(circle at 35% 30%, #ffc9a8, #ff8a5c 55%, #e0521f); }
+:is(.smiley-face, .so-face)[data-mood="angry"] .s-eye { height: 14px; background: white; }
+:is(.smiley-face, .so-face)[data-mood="angry"] .s-eye.left { transform: rotate(18deg); }
+:is(.smiley-face, .so-face)[data-mood="angry"] .s-eye.right { transform: rotate(-18deg); }
+:is(.smiley-face, .so-face)[data-mood="angry"] .s-pupil { background: #7a0d0d; }
+:is(.smiley-face, .so-face)[data-mood="angry"] .s-mouth { width: 26px; height: 10px; border: 3px solid #222; border-bottom: none; border-radius: 12px 12px 0 0; background: #5b0b0b; bottom: 10px; }
+:is(.smiley-face, .so-face)[data-mood="angry"] .s-cheek { background: rgba(200,30,30,.5); }
 /* FURIOUS: face gets angrier in stages (angry -> furious) */
-#smileyFace[data-mood="furious"] { background: radial-gradient(circle at 35% 30%, #ff9a7a, #d62f1f 55%, #7a0d0d); border-color: #400; animation: furious-shake .25s infinite; }
-#smileyFace[data-mood="furious"] .s-eye { height: 12px; background: #fff; }
-#smileyFace[data-mood="furious"] .s-eye.left { transform: rotate(28deg); }
-#smileyFace[data-mood="furious"] .s-eye.right { transform: rotate(-28deg); }
-#smileyFace[data-mood="furious"] .s-pupil { background: black; width: 8px; height: 8px; }
-#smileyFace[data-mood="furious"] .s-mouth { width: 30px; height: 14px; background: black; border-color: #400; border-bottom: none; border-radius: 14px 14px 0 0; bottom: 8px; }
+:is(.smiley-face, .so-face)[data-mood="furious"] { background: radial-gradient(circle at 35% 30%, #ff9a7a, #d62f1f 55%, #7a0d0d); border-color: #400; animation: furious-shake .25s infinite; }
+:is(.smiley-face, .so-face)[data-mood="furious"] .s-eye { height: 12px; background: #fff; }
+:is(.smiley-face, .so-face)[data-mood="furious"] .s-eye.left { transform: rotate(28deg); }
+:is(.smiley-face, .so-face)[data-mood="furious"] .s-eye.right { transform: rotate(-28deg); }
+:is(.smiley-face, .so-face)[data-mood="furious"] .s-pupil { background: black; width: 8px; height: 8px; }
+:is(.smiley-face, .so-face)[data-mood="furious"] .s-mouth { width: 30px; height: 14px; background: black; border-color: #400; border-bottom: none; border-radius: 14px 14px 0 0; bottom: 8px; }
 @keyframes furious-shake { 0% { transform: translate(-2px,1px) rotate(-4deg); } 50% { transform: translate(2px,-1px) rotate(4deg); } 100% { transform: translate(-2px,1px) rotate(-4deg); } }
 /* screen shake while Smiley rampages with root commands */
 #desktop.shaking { animation: screenshake .3s infinite; }
@@ -492,9 +508,9 @@ button { cursor: pointer; font-family: inherit; }
 }
 @keyframes flip-jab { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
 /* totally hacked: green tint, pupils replaced by 101 */
-#smileyFace[data-mood="hacked"] { background: radial-gradient(circle at 35% 30%, #d8ffd8, #7ae67a 55%, #2d8a2d); }
-#smileyFace[data-mood="hacked"] .s-pupil { display: none; }
-#smileyFace[data-mood="hacked"] .s-eye::after {
+:is(.smiley-face, .so-face)[data-mood="hacked"] { background: radial-gradient(circle at 35% 30%, #d8ffd8, #7ae67a 55%, #2d8a2d); }
+:is(.smiley-face, .so-face)[data-mood="hacked"] .s-pupil { display: none; }
+:is(.smiley-face, .so-face)[data-mood="hacked"] .s-eye::after {
   content: "101"; position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
   font-size: 7px; font-family: monospace; color: #0a0;
 }
@@ -640,8 +656,8 @@ button { cursor: pointer; font-family: inherit; }
 
 /* little tongue: only while talking (mouth open), never at rest or from petting */
 .s-tongue { display: none; position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); width: 12px; height: 6px; background: #ff8fa3; border-radius: 6px 6px 8px 8px; }
-#smileyFace[data-mood="normal"].talking .s-tongue,
-#smileyFace[data-mood="happy"].talking .s-tongue { display: block; }
+:is(.smiley-face, .so-face)[data-mood="normal"].talking .s-tongue,
+:is(.smiley-face, .so-face)[data-mood="happy"].talking .s-tongue { display: block; }
 #smiley.demonic .s-tongue { display: none !important; }
 
 /* mini Smiley dolls (Paint beret, Slides suit, Updates builder) */
@@ -1823,44 +1839,42 @@ body.mobile-mode .window,
 .fnaf-msg { text-align: center; font-size: 13px; margin-top: 10px; min-height: 40px; }
 .fnaf-msg button { margin-left: 8px; }
 
-/* Smiley.org: the whole body */
+
+/* ===== Smiley.org: the accurate Smiley head, every emotion, optional anatomy ===== */
 .so-wrap { max-width: 560px; margin: 0 auto; text-align: center; }
-.so-stage { position: relative; height: 372px; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 32%, #16203a, #070a12 74%); border-radius: 14px; border: 2px solid #24304a; overflow: hidden; }
-.so-smiley { position: relative; width: 200px; height: 310px; }
-.so-antenna { position: absolute; left: 50%; top: -22px; transform: translateX(-50%); width: 6px; height: 26px; background: #222; border-radius: 3px; }
-.so-antenna::after { content: ""; position: absolute; left: 50%; top: -13px; transform: translateX(-50%); width: 15px; height: 15px; border-radius: 50%; background: #ff5252; box-shadow: 0 0 12px rgba(255, 82, 82, .9); }
-.so-head { position: absolute; left: 50%; top: 4px; transform: translateX(-50%); width: 132px; height: 132px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff9c2, #ffd21f 52%, #f59e00); border: 4px solid #222; }
-.so-eye { position: absolute; top: 46px; width: 24px; height: 30px; background: #fff; border: 3px solid #222; border-radius: 50%; }
-.so-eye::after { content: ""; position: absolute; left: 50%; top: 56%; width: 12px; height: 16px; background: #222; border-radius: 50%; transform: translate(-50%, -50%); }
-.so-eye.l { left: 22px; }
-.so-eye.r { right: 22px; }
-.so-cheek { position: absolute; top: 88px; width: 18px; height: 10px; background: rgba(255, 120, 120, .6); border-radius: 50%; }
-.so-cheek.l { left: 12px; }
-.so-cheek.r { right: 12px; }
-.so-mouth { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); width: 56px; height: 28px; border: 4px solid #222; border-top: none; border-radius: 4px 4px 30px 30px; }
-.so-body { position: absolute; left: 50%; top: 120px; transform: translateX(-50%); width: 112px; height: 112px; border-radius: 46px; background: radial-gradient(circle at 35% 25%, #fff9c2, #ffd21f 55%, #f59e00); border: 4px solid #222; }
-.so-arm, .so-leg { position: absolute; background: #ffd21f; border: 4px solid #222; }
-.so-arm { width: 22px; height: 84px; top: 130px; border-radius: 20px; }
-.so-arm.l { left: 28px; transform: rotate(18deg); }
-.so-arm.r { right: 28px; transform: rotate(-18deg); }
-.so-leg { width: 24px; height: 78px; top: 226px; background: #f59e00; border-radius: 16px; }
-.so-leg.l { left: 62px; }
-.so-leg.r { right: 62px; }
+.so-sub { font-size: 13px; color: #b9c6da; margin: 2px 0 10px; }
+.so-stage { position: relative; height: 360px; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 42%, #16203a, #070a12 74%); border-radius: 14px; border: 2px solid #24304a; overflow: hidden; }
+.so-face-move { display: flex; align-items: center; justify-content: center; position: relative; z-index: 2; }
+.so-face-scale { transform: scale(2.7); }
+.so-face { cursor: default; }
+#soAnatomySvg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 200px; height: 200px; pointer-events: none; overflow: visible; z-index: 1; }
+.so-stage.anatomy .so-face-move { opacity: .3; }
+.so-stage.move-demo .so-face-move { animation: so-roll-demo 3s ease-in-out infinite; }
+@keyframes so-roll-demo { 0%, 100% { transform: translateX(-92px) rotate(-10deg); } 50% { transform: translateX(92px) rotate(10deg); } }
+.so-sec { margin: 12px 0 4px; font-size: 11px; letter-spacing: 1.5px; color: #7f93b5; font-weight: bold; }
 .so-btns { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 10px 0; }
 .so-btns button { padding: 8px 10px; border: none; border-radius: 9px; background: #24304a; color: #dfe8f5; font-weight: bold; cursor: pointer; }
 .so-btns button:hover, .so-btns button:active { background: #33456a; }
+.so-btns button.so-anat-btn.active { background: linear-gradient(180deg, #4fc97a, #2f9c56); }
+.so-btns button.so-mood-btn.active { background: linear-gradient(180deg, #f6d365, #f0b429); color: #3a2a00; }
+.so-info { margin-top: 8px; font-size: 13px; color: #cdd9ea; text-align: left; }
+.so-info:empty { display: none; }
+.so-info b { color: #ffd93b; }
+.so-info p { margin: 4px 0; }
+.so-info .so-legend { display: grid; gap: 5px; margin-top: 6px; font-size: 12px; }
+.so-info .so-legend span { display: flex; align-items: flex-start; gap: 6px; }
+.so-info .so-legend i { width: 10px; height: 10px; border-radius: 50%; flex: none; margin-top: 4px; }
+.so-info .so-legend b { color: #fff; }
 .so-log { font-size: 13px; color: #b9c6da; min-height: 34px; }
-.so-smiley.wave .so-arm.r { animation: so-wave .4s ease-in-out 4; transform-origin: top center; }
-@keyframes so-wave { 0%, 100% { transform: rotate(-18deg); } 50% { transform: rotate(-72deg); } }
-.so-smiley.jump { animation: so-jump .5s ease-in-out 3; }
-@keyframes so-jump { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-38px); } }
-.so-smiley.dance { animation: so-dance .4s ease-in-out 8; }
-@keyframes so-dance { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(7deg); } }
-.so-smiley.spin { animation: so-spin .8s linear 2; }
-@keyframes so-spin { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
-.so-smiley.talk .so-mouth { animation: so-talk .28s ease-in-out 8; }
-@keyframes so-talk { 0%, 100% { height: 10px; } 50% { height: 32px; } }
-.so-smiley.sleep .so-eye { height: 6px; border-radius: 6px; background: #222; border-color: #222; }
-.so-smiley.sleep .so-eye::after { display: none; }
-.so-smiley.angry .so-head { box-shadow: 0 0 28px rgba(255, 60, 60, .85); }
-.so-smiley.angry .so-mouth { border-radius: 30px 30px 4px 4px; border-top: 4px solid #222; border-bottom: none; }
+.so-face.wave { animation: so-face-wave .4s ease-in-out 4; }
+@keyframes so-face-wave { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-14deg); } }
+.so-face.jump { animation: so-face-jump .5s ease-in-out 3; }
+@keyframes so-face-jump { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-26px); } }
+.so-face.dance { animation: so-face-dance .4s ease-in-out 8; }
+@keyframes so-face-dance { 0%, 100% { transform: rotate(-10deg) translateY(0); } 50% { transform: rotate(10deg) translateY(-6px); } }
+.so-face.spin { animation: so-face-spin .8s linear 2; }
+@keyframes so-face-spin { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+.so-face.talk { animation: so-face-talk .5s ease-in-out 5; }
+@keyframes so-face-talk { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+.so-face.sleeping .s-eye { height: 3px; border-radius: 3px; background: #222; animation: none; }
+.so-face.sleeping .s-pupil, .so-face.sleeping .s-sparkle { display: none; }

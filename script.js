@@ -1875,6 +1875,8 @@ function renderBody(id) {
       </div>
       <p style="font-size:12px;margin:2px 0 6px">Click any update to watch its trailer — Smiley narrates it out loud. ▶</p>
       <div class="call-log up-list" style="max-height:260px">
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.30</b> - THE REAL SMILEY, HEAD ONLY: Smiley.org is now the exact Smiley you see on the computer — same yellow ball, same eyes, same smile, same everything. No body, no arms, no legs, no antenna. Every emotion is 1:1 accurate because it uses the real AI's own mood styles. The optional anatomy now shows what's inside the ball: skeleton, organs, and how he moves.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.29</b> - SMILEY.ORG: ALL EMOTIONS + ANATOMY: the final game now matches the REAL Smiley AI. Trigger every emotion he has — Normal, Happy, Sad, Angry, Furious, Scared, Worried, Concerned, Cool and Hacked — plus Wave, Jump, Dance, Talk, Sleep and Spin. Then open his anatomy if you want: his titanium <b>skeleton</b>, his <b>organs</b> (memory chip, emotion core, gyroscope, voice box, power cell, snack pouch), and <b>how he moves</b>.</div>
         <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.28</b> - THE ARCADE: search "games" in the Browser (it's NOT one of the quick links — you have to search it) to open the Arcade. It has FNAF-style <b>Five Nights at Smiley's</b> (slam the doors, survive to 6 AM, +$150), <b>Smiley Clicker</b>, and the FINAL game <b>Smiley.org</b> — where you see Smiley's WHOLE BODY and everything he does: wave, jump, dance, talk, sleep, get angry, spin.</div>
         <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.27</b> - NO MORE SMASHING: the screen-smashing and glass-shard repair are GONE (it got annoying). Giving the scammer your code now just robs you — he takes up to $250 — and Smiley scolds you. Refusing a call is always safe. Also: the music track picker (Cool Jazz / 3008's crunchy theme).</div>
         <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.26</b> - CRUNCHY FRIDAY: Settings now has a music track picker. Pick "Cool Jazz" or the new "3008's Friday theme, except it's CRUNCHY" — a distorted chiptune loop. Your choice is saved with your game.</div>
@@ -6036,7 +6038,26 @@ function fnafWin() {
   if (msg) msg.innerHTML = `<b style="color:#7cff7c">6 AM! You survived the night! +$150</b><button onclick="startFNAF()">Play again</button>`;
   smileySay("6 AM! You made it! I was hiding under the desk the whole time.", 4200);
 }
-// --- Smiley.org: the FINAL game. See his whole body and everything he does. ---
+// --- Smiley.org: the FINAL game. The real Smiley head, every emotion, plus anatomy. ---
+const SO_MOODS = ["normal", "happy", "sad", "angry", "furious", "scared", "worried", "concerned", "cool", "hacked"];
+const SO_MOVES = {
+  normal:    ["Normal. This is the exact Smiley you see on the computer: yellow ball, white oval eyes, little U smile, rosy cheeks."],
+  happy:     ["Happy! Brighter yellow and a big open grin. This is how he looks after a compliment."],
+  sad:       ["Sad. His face goes cool blue, his eyes droop, and his smile turns upside down."],
+  angry:     ["Angry. Orange face, slanted eyes, dark-red frown. You get this when you refuse his advice."],
+  furious:   ["FURIOUS. Red-hot face, huge angry eyes, black shouting mouth — and he shakes."],
+  scared:    ["Scared. Pale yellow, tall worried eyes, a tiny open mouth. Spam callers do this to him."],
+  worried:   ["Worried. Tilted eyes and a little round mouth. He makes this face when you're about to do something dumb."],
+  concerned: ["Concerned. One eye squints, the other widens, flat mouth. He is judging your choices."],
+  cool:      ["Cool. Solid black shades and a flat smirk. Pure Ultra-mode energy."],
+  hacked:    ["Hacked. Green face and glowing eyes. Something else is driving him."],
+  wave:      ["He waves hello! Well — he tilts and bobs, because he's a ball. He does it at everyone, even spam callers."],
+  jump:      ["He hops! He bounces when he's happy, when you poke him, and whenever he hears the word 'snack'."],
+  dance:     ["He dances! He wiggles side to side and bobs. He has no legs and does not care."],
+  talk:      ["He talks! His jaw opens and closes. Press C on the desktop to chat with him."],
+  sleep:     ["He sleeps! His eyes close into little lines and he bobbles slowly. He lives in the corner."],
+  spin:      ["He spins! Same head, same face, same everything — shown from every angle."],
+};
 function startSmileyOrg() {
   openGameOverlay("🌟 Smiley.org — the final game");
   const s = document.getElementById("gameStage");
@@ -6044,53 +6065,169 @@ function startSmileyOrg() {
   s.innerHTML = `
     <div class="so-wrap">
       <h3>🌟 Smiley.org</h3>
-      <p style="font-size:13px;color:#b9c6da;margin:2px 0 10px">The official Smiley AI homepage. This is his <b>WHOLE BODY</b> — head, body, arms, legs and all. Press a button to see what he does.</p>
-      <div class="so-stage">
-        <div class="so-smiley" id="soSmiley">
-          <div class="so-antenna"></div>
-          <div class="so-head">
-            <div class="so-eye l"></div><div class="so-eye r"></div>
-            <div class="so-cheek l"></div><div class="so-cheek r"></div>
-            <div class="so-mouth"></div>
+      <p class="so-sub">The official Smiley AI homepage. This is <b>the same Smiley you see on the computer</b> — same design, same face, same everything. Try every emotion he has, then open his anatomy if you want to see inside.</p>
+      <div class="so-stage" id="soStage">
+        <div class="so-face-move" id="soFaceMove">
+          <div class="so-face-scale">
+            <div class="so-face" id="soFace" data-mood="normal">
+              <div class="s-ear left"></div>
+              <div class="s-ear right"></div>
+              <div class="s-pixel"></div>
+              <div class="s-freckle f1"></div>
+              <div class="s-freckle f2"></div>
+              <div class="s-freckle f3"></div>
+              <div class="s-freckle f4"></div>
+              <div class="s-shine"></div>
+              <div class="s-cheek left"></div>
+              <div class="s-cheek right"></div>
+              <div class="s-diamond d1"></div>
+              <div class="s-diamond d2"></div>
+              <div class="s-diamond d3"></div>
+              <div class="s-eyes">
+                <div class="s-eye left"><div class="s-pupil"></div><div class="s-sparkle"></div></div>
+                <div class="s-eye right"><div class="s-pupil"></div><div class="s-sparkle"></div></div>
+              </div>
+              <div class="s-mouth"><div class="s-tongue"></div></div>
+              <div class="s-shadow"></div>
+            </div>
           </div>
-          <div class="so-body"></div>
-          <div class="so-arm l"></div><div class="so-arm r"></div>
-          <div class="so-leg l"></div><div class="so-leg r"></div>
         </div>
+        <svg id="soAnatomySvg" viewBox="0 0 100 100" aria-hidden="true"></svg>
       </div>
+      <div class="so-sec">EMOTIONS — every mood the real Smiley AI can make</div>
+      <div class="so-btns">
+        <button class="so-mood-btn" data-mood="normal" onclick="soDo('normal')">😶 Normal</button>
+        <button class="so-mood-btn" data-mood="happy" onclick="soDo('happy')">😄 Happy</button>
+        <button class="so-mood-btn" data-mood="sad" onclick="soDo('sad')">😢 Sad</button>
+        <button class="so-mood-btn" data-mood="angry" onclick="soDo('angry')">😠 Angry</button>
+        <button class="so-mood-btn" data-mood="furious" onclick="soDo('furious')">🤬 Furious</button>
+        <button class="so-mood-btn" data-mood="scared" onclick="soDo('scared')">😨 Scared</button>
+        <button class="so-mood-btn" data-mood="worried" onclick="soDo('worried')">😟 Worried</button>
+        <button class="so-mood-btn" data-mood="concerned" onclick="soDo('concerned')">😕 Concerned</button>
+        <button class="so-mood-btn" data-mood="cool" onclick="soDo('cool')">😎 Cool</button>
+        <button class="so-mood-btn" data-mood="hacked" onclick="soDo('hacked')">👾 Hacked</button>
+      </div>
+      <div class="so-sec">ACTIONS — what he actually does</div>
       <div class="so-btns">
         <button onclick="soDo('wave')">👋 Wave</button>
         <button onclick="soDo('jump')">⬆️ Jump</button>
         <button onclick="soDo('dance')">🕺 Dance</button>
         <button onclick="soDo('talk')">💬 Talk</button>
         <button onclick="soDo('sleep')">😴 Sleep</button>
-        <button onclick="soDo('angry')">😠 Angry</button>
         <button onclick="soDo('spin')">🔄 Spin</button>
       </div>
-      <div class="so-log" id="soLog">Press a button to see what Smiley does.</div>
+      <div class="so-sec">ANATOMY — optional. Look inside.</div>
+      <div class="so-btns">
+        <button class="so-anat-btn" data-part="skeleton" onclick="soAnatomy('skeleton')">🦴 Skeleton</button>
+        <button class="so-anat-btn" data-part="organs" onclick="soAnatomy('organs')">🫀 Organs</button>
+        <button class="so-anat-btn" data-part="move" onclick="soAnatomy('move')">🏃 How he moves</button>
+      </div>
+      <div class="so-info" id="soAnatomyInfo"></div>
+      <div class="so-log" id="soLog">Pick an emotion, an action, or an anatomy view.</div>
     </div>`;
   unlockAchievement("smileyorg_game");
   setSmileyMood("happy");
-  smileySay("Welcome to Smiley.org! That's... that's my WHOLE BODY. I'm so proud.", 4200);
+  smileySay("Welcome to Smiley.org! That's me. Same head, same face. And yes, you can look inside. Gross.", 4600);
 }
 function soDo(action) {
-  const el = document.getElementById("soSmiley");
-  if (!el) return;
-  el.className = "so-smiley";
+  const el = document.getElementById("soFace");
+  const info = SO_MOVES[action];
+  if (!el || !info) return;
+  const isMood = SO_MOODS.indexOf(action) >= 0;
+  el.className = "so-face";
+  el.dataset.mood = isMood ? action : "normal";
   void el.offsetWidth; // restart the CSS animation
-  el.classList.add(action);
-  const lines = {
-    wave: "👋 Smiley waves hello! He waves at everyone — even spam callers, before you ban them.",
-    jump: "⬆️ Smiley hops! He hops when he's happy, when you poke him, and whenever he hears the word 'snack'.",
-    dance: "🕺 Smiley dances! He wiggles side to side. He has no real legs and does not care.",
-    talk: "💬 Smiley talks! He blinks, opens his jaw and babbles. Press C on the desktop to chat with him.",
-    sleep: "😴 Smiley sleeps! He lives in the corner and naps between updates. Shh.",
-    angry: "😠 Smiley is ANGRY! Say 'verity' too many times, or refuse his advice, and you'll see this face.",
-    spin: "🔄 Smiley spins! Just showing off the whole body: head, body, arms, legs and the little antenna.",
-  };
+  if (isMood) {
+    // exact same data-mood the desktop AI uses, so the face is 1:1 accurate
+  } else if (action === "talk") {
+    el.classList.add("talk", "talking");
+  } else if (action === "sleep") {
+    el.classList.add("sleeping");
+  } else {
+    el.classList.add(action);
+  }
+  if (soAnatomyPart) soAnatomy(soAnatomyPart); // close the anatomy view when playing with the face
+  document.querySelectorAll(".so-mood-btn").forEach((b) => b.classList.toggle("active", isMood && b.dataset.mood === action));
   const log = document.getElementById("soLog");
-  if (log) log.textContent = lines[action] || "";
-  setSmileyMood(action === "angry" ? "angry" : action === "sleep" ? "normal" : "happy");
-  beep(action === "angry" ? 170 : 540, action === "angry" ? 80 : 950, 0.12, "square");
-  setTimeout(() => { const e2 = document.getElementById("soSmiley"); if (e2) e2.className = "so-smiley"; }, 2600);
+  if (log) log.textContent = info[0];
+  beep(action === "angry" || action === "furious" ? 170 : 540, action === "angry" || action === "furious" ? 80 : 950, 0.12, "square");
+  if (!isMood) {
+    clearTimeout(el._soT);
+    el._soT = setTimeout(() => {
+      const e2 = document.getElementById("soFace");
+      if (e2) { e2.className = "so-face"; e2.dataset.mood = "normal"; }
+    }, 2600);
+  }
+}
+const SO_SKELETON = `
+  <g fill="none" stroke="#e8f0ff" stroke-width="2.2" stroke-linecap="round" opacity=".95">
+    <circle cx="50" cy="50" r="47"/>
+    <ellipse cx="50" cy="50" rx="47" ry="17"/>
+    <ellipse cx="50" cy="50" rx="17" ry="47"/>
+    <line x1="50" y1="3" x2="50" y2="97"/>
+    <line x1="3" y1="50" x2="97" y2="50"/>
+    <circle cx="50" cy="50" r="5" fill="#e8f0ff"/>
+  </g>
+  <g fill="#8fd3ff">
+    <circle cx="38" cy="40" r="2.5"/><circle cx="62" cy="40" r="2.5"/><circle cx="50" cy="78" r="2.5"/>
+  </g>`;
+const SO_ORGANS = `
+  <g opacity=".96">
+    <rect x="36" y="16" width="28" height="16" rx="4" fill="#5ad1ff" stroke="#0a2a3a" stroke-width="2"/>
+    <path d="M40 16 v-4 M46 16 v-4 M52 16 v-4 M58 16 v-4" stroke="#5ad1ff" stroke-width="2" stroke-linecap="round"/>
+    <path d="M42 32 v4 M50 32 v4 M58 32 v4" stroke="#5ad1ff" stroke-width="2" stroke-linecap="round"/>
+    <path d="M50 62 C43 56 34 52 34 45 C34 40 38 37 43 37 C46 37 49 39 50 42 C51 39 54 37 57 37 C62 37 66 40 66 45 C66 52 57 56 50 62 Z" fill="#ff5b6e" stroke="#5a0a16" stroke-width="2"/>
+    <circle cx="50" cy="68" r="7" fill="none" stroke="#8fd3ff" stroke-width="2"/>
+    <circle cx="50" cy="68" r="3" fill="none" stroke="#8fd3ff" stroke-width="2"/>
+    <circle cx="50" cy="83" r="8" fill="#ffd93b" stroke="#5a4300" stroke-width="2"/>
+    <path d="M45 83 h10 M47 79 h6 M47 87 h6" stroke="#5a4300" stroke-width="2" stroke-linecap="round"/>
+    <rect x="20" y="48" width="9" height="18" rx="3" fill="#7cff7c" stroke="#0a3310" stroke-width="2"/>
+    <rect x="71" y="48" width="9" height="18" rx="3" fill="#ffb86b" stroke="#5a2d00" stroke-width="2"/>
+  </g>`;
+const SO_MOVE = `
+  <g opacity=".96">
+    <line x1="8" y1="94" x2="92" y2="94" stroke="#9fb3d1" stroke-width="1.5" stroke-dasharray="3 3"/>
+    <path d="M14 86 H74" stroke="#7cff7c" stroke-width="2.5" marker-end="url(#soArrow)"/>
+    <path d="M22 70 Q50 26 78 70" fill="none" stroke="#ffd93b" stroke-width="2.5" stroke-dasharray="4 4"/>
+    <path d="M72 63 l7 8 -11 2 Z" fill="#ffd93b"/>
+    <circle cx="50" cy="52" r="16" fill="none" stroke="#8fd3ff" stroke-width="2.5" stroke-dasharray="3 3"/>
+    <circle cx="50" cy="52" r="8" fill="none" stroke="#8fd3ff" stroke-width="2.5"/>
+  </g>
+  <defs><marker id="soArrow" markerWidth="7" markerHeight="7" refX="5" refY="2.5" orient="auto"><path d="M0 0 L5 2.5 L0 5 Z" fill="#7cff7c"/></marker></defs>`;
+let soAnatomyPart = null;
+function soAnatomy(part) {
+  const stage = document.getElementById("soStage");
+  const svg = document.getElementById("soAnatomySvg");
+  const info = document.getElementById("soAnatomyInfo");
+  if (!stage || !svg || !info) return;
+  const same = soAnatomyPart === part;
+  soAnatomyPart = same ? null : part;
+  document.querySelectorAll(".so-anat-btn").forEach((b) => b.classList.toggle("active", !same && b.dataset.part === part));
+  document.querySelectorAll(".so-mood-btn").forEach((b) => b.classList.remove("active"));
+  const face = document.getElementById("soFace");
+  if (face) { face.className = "so-face"; face.dataset.mood = "normal"; }
+  const logEl = document.getElementById("soLog");
+  if (logEl) logEl.textContent = "";
+  stage.classList.toggle("anatomy", !same && part !== "move");
+  stage.classList.toggle("move-demo", !same && part === "move");
+  if (same) { svg.innerHTML = ""; info.innerHTML = ""; return; }
+  if (part === "skeleton") {
+    svg.innerHTML = SO_SKELETON;
+    info.innerHTML = `<b>🦴 Skeleton</b><p>Under the yellow shell: a lightweight titanium sphere frame. A central core holds everything, lat/long struts keep him perfectly round, and small mounts hold the eyes and mouth. No body — he is a ball.</p>`;
+    beep(300, 220, 0.16, "triangle");
+  } else if (part === "organs") {
+    svg.innerHTML = SO_ORGANS;
+    info.innerHTML = `<b>🫀 Organs</b><div class="so-legend">
+      <span><i style="background:#5ad1ff"></i><b>Memory chip</b> — remembers your name, your insults and every update.</span>
+      <span><i style="background:#ff5b6e"></i><b>Emotion core</b> — the happy/sad/angry heart of the whole AI.</span>
+      <span><i style="background:#8fd3ff"></i><b>Gyroscope</b> — keeps him upright and helps him roll.</span>
+      <span><i style="background:#ffd93b"></i><b>Voice box</b> — all the talking, beeps and "purrr" noises.</span>
+      <span><i style="background:#7cff7c"></i><b>Power cell</b> — runs on attention and the occasional snack.</span>
+      <span><i style="background:#ffb86b"></i><b>Snack pouch</b> — yes, he really does keep snacks in there.</span></div>`;
+    beep(420, 620, 0.16, "triangle");
+  } else {
+    svg.innerHTML = SO_MOVE;
+    info.innerHTML = `<b>🏃 How he moves</b><p>No legs, no arms — just physics. The gyroscope spins up, he leans, and the whole ball floats, hops or rolls. Watch him move.</p>`;
+    beep(520, 900, 0.16, "triangle");
+  }
 }
