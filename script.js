@@ -42,6 +42,7 @@ document.getElementById("powerBtn").onclick = () => {
   renderIcons();
   openApp("games"); // free starter app so new players can earn cash
   initSmiley(); // wake up the Smiley AI desktop pet (role greeting inside)
+  unlockAchievement("boot");
   termPrint("Type HELP and press Enter.");
 };
 
@@ -61,6 +62,7 @@ function applySmileyDetail(level, silent) {
   document.getElementById("smileyFace").dataset.detail = level;
   // Ultra details the WHOLE computer, not just Smiley.
   document.getElementById("desktop").classList.toggle("ultra", level === "ultra");
+  if (level === "ultra") unlockAchievement("buy_ultra", silent);
   if (level === "ultra") {
     try { localStorage.removeItem("smileyAI-plain"); } catch (e) {}
     document.getElementById("desktop").classList.remove("plain");
@@ -99,6 +101,8 @@ const APPS = [
   { id: "installer", name: "Installer", emoji: "📦", price: 0 },
   { id: "trash", name: "Trash", emoji: "🗑️", price: 100 },
   { id: "updates", name: "Updates", emoji: "📋", price: 0 },
+  { id: "achievements", name: "Achievements", emoji: "🏆", price: 0 },
+  { id: "fanart", name: "Fan Art", emoji: "🖼️", price: 5 },
   { id: "test", name: "Test Room", emoji: "🧪", price: 0 },
   { id: "dl_clippy", name: "ClippyPlus", emoji: "📎", price: 60 },
   { id: "dl_byte", name: "ByteBuddy", emoji: "🤖", price: 80 },
@@ -110,9 +114,38 @@ const APPS = [
 let scytheUnlocked = false; // only appears after rescuing the aftermath note
 let updateSuggestions = []; // user-submitted future update ideas (admin views them)
 let bannedCallers = new Set(); // callers you banned for good
+let customAI = null; // your Build-Your-Buddy: {name, emoji, color, vibe}
 let smileyGone = false; // true when dragged off screen (until his app opens)
+// --- ACHIEVEMENTS: permanent. Stored in the wipe-proof vault so they survive refresh AND Clear Memory. ---
+const ACHIEVEMENTS = [
+  { id: "boot", name: "First Boot", icon: "🥾", desc: "Boot the desktop for the first time." },
+  { id: "open_app", name: "Window Shopper", icon: "🪟", desc: "Open any app." },
+  { id: "chat_smiley", name: "Hello, Smiley", icon: "🙂", desc: "Talk to Smiley." },
+  { id: "pet_smiley", name: "Good Human", icon: "🤚", desc: "Pet Smiley." },
+  { id: "play_game", name: "Gamer", icon: "🎮", desc: "Play a mini-game in Games." },
+  { id: "win_clicker", name: "Click Master", icon: "🖱️", desc: "Win Smiley Clicker." },
+  { id: "win_lucky", name: "Lucky Seven", icon: "🎰", desc: "Win Lucky 7." },
+  { id: "wear_hat", name: "Hat Person", icon: "🎩", desc: "Equip any hat." },
+  { id: "buy_ultra", name: "Ultra Fan", icon: "😎", desc: "Unlock Ultra detail." },
+  { id: "install_pet", name: "AI Collector", icon: "📎", desc: "Install a rival AI." },
+  { id: "ban_caller", name: "Do Not Call", icon: "🚫", desc: "Ban a spam caller for good." },
+  { id: "answer_call", name: "Bad Idea", icon: "📞", desc: "Answer a spam call. Why?" },
+  { id: "bank_loan", name: "Loan Shark", icon: "🏦", desc: "Take a loan from the Bank." },
+  { id: "mafia", name: "Deal With The Devil", icon: "💰", desc: "Borrow money from the mafia." },
+  { id: "survive_mafia", name: "Survivor", icon: "🍔", desc: "Rebuild everything after the mafia." },
+  { id: "become_admin", name: "Root Access", icon: "🛡️", desc: "Unlock the Admin panel with 593." },
+  { id: "hack_mode", name: "Hacker", icon: "💀", desc: "Enter Hack Mode." },
+  { id: "infinite_money", name: "Money Printer", icon: "💸", desc: "Turn on Infinite Money." },
+  { id: "browser_visit", name: "Surfer", icon: "🌐", desc: "Browse the web." },
+  { id: "terminal_cmd", name: "Command Line", icon: "⌨️", desc: "Run a Terminal command." },
+  { id: "paint", name: "Artist", icon: "🎨", desc: "Paint something." },
+  { id: "read_updates", name: "Up To Date", icon: "📋", desc: "Read the Update Board." },
+  { id: "creator", name: "Smiley's Creator", icon: "👑", desc: "In Admin mode, tell the Phone scammer 523 to get owner permissions on Liam's account." },
+];
+let unlockedAchievements = new Set();
+let ownerAccount = false; // true after the 523 owner code: you're on Liam's account with owner perms
 // App ownership: only installer/settings/files/games are free. Everything else costs fake cash.
-let ownedApps = { installer: true, settings: true, files: true, games: true, terminal: true, phone: true, firewall: true, updates: true, smiley: true, test: true };
+let ownedApps = { installer: true, settings: true, files: true, games: true, terminal: true, phone: true, firewall: true, updates: true, achievements: true, smiley: true, test: true };
 let devMode = false; // developer mode (admin + ultra): everything free + test room
 let mobileMode = false; // forced mobile layout (button on loading screen for phone players)
 let smileySize = 1; // desktop pet scale 0.5x - 2x
@@ -178,6 +211,7 @@ function buyApp(id) {
   ownedApps[id] = true;
   installed[id] = true;
   trashBin = trashBin.filter((t) => t !== id);
+  if (id === "dl_clippy" || id === "dl_byte" || id === "liam") unlockAchievement("install_pet");
   renderIcons();
   saveGame();
   setSmileyMood("happy");
@@ -224,6 +258,8 @@ function writeVault() {
     localStorage.setItem(VAULT_KEY, JSON.stringify({
       licenses: { ultra: owned.ultra, hats: owned.hats, admin: isAdmin, apps: ownedApps, hacker: hackerPerms, diamonds: owned.diamonds, arcade: arcadeOn },
       installed, trash: trashBin,
+      achievements: [...unlockedAchievements],
+      owner: ownerAccount,
     }));
   } catch (e) {}
 }
@@ -233,11 +269,20 @@ function applyPlainDisplay() {
   try { plain = localStorage.getItem("smileyAI-plain") === "1"; } catch (e) {}
   if (plain && !owned.ultra) document.getElementById("desktop").classList.add("plain");
 }
+// Achievements + owner always survive (vault-backed), even when a normal save exists.
+function mergeVaultUnlocks() {
+  const v = readVault();
+  if (!v) return;
+  if (Array.isArray(v.achievements)) v.achievements.forEach((a) => { if (ACHIEVEMENTS.some((x) => x.id === a)) unlockedAchievements.add(a); });
+  if (v.owner) ownerAccount = true;
+}
 function applyVaultState() {
   const v = readVault();
   if (!v) return;
   if (v.installed) Object.keys(v.installed).forEach((k) => { if (APPS.some((a) => a.id === k)) installed[k] = v.installed[k]; });
   if (Array.isArray(v.trash)) trashBin = v.trash.filter((id) => APPS.some((a) => a.id === id));
+  if (Array.isArray(v.achievements)) v.achievements.forEach((a) => { if (ACHIEVEMENTS.some((x) => x.id === a)) unlockedAchievements.add(a); });
+  if (v.owner) ownerAccount = true;
   if (v.licenses) {
     // hats persist; ultra + admin are stripped on refresh (recover via Files backup or 593)
     if (v.licenses.hats) Object.keys(owned.hats).forEach((h) => { owned.hats[h] = owned.hats[h] || !!v.licenses.hats[h]; });
@@ -245,6 +290,73 @@ function applyVaultState() {
   }
   updateCashHud();
   applyPlainDisplay();
+}
+// --- Achievements engine: unlock once, forever (vault-backed + toast) ---
+function unlockAchievement(id, silent) {
+  if (!id || unlockedAchievements.has(id)) return;
+  const a = ACHIEVEMENTS.find((x) => x.id === id);
+  if (!a) return;
+  unlockedAchievements.add(id);
+  writeVault();
+  saveGame();
+  if (!silent) showAchievementToast(a);
+  if (openWins["achievements"]) renderBody("achievements");
+}
+function showAchievementToast(a) {
+  let t = document.getElementById("achToast");
+  if (!t) { t = document.createElement("div"); t.id = "achToast"; document.getElementById("desktop").appendChild(t); }
+  t.innerHTML = `<span class="ach-toast-icon">${a.icon}</span><div class="ach-toast-txt"><b>🏆 Achievement unlocked!</b><div>${a.name}</div></div>`;
+  t.classList.remove("hidden");
+  void t.offsetWidth; // restart the slide-in animation
+  t.classList.add("show");
+  clearTimeout(t._t);
+  t._t = setTimeout(() => { t.classList.remove("show"); setTimeout(() => t.classList.add("hidden"), 320); }, 4000);
+}
+function resetAchievements() {
+  if (!isAdmin) return;
+  unlockedAchievements.clear();
+  writeVault();
+  saveGame();
+  if (openWins["achievements"]) renderBody("achievements");
+  smileySay("Achievement progress wiped. A fresh hunt!", 3000);
+}
+// Main menu / Start menu Credits
+function openCredits() { document.getElementById("creditsScreen")?.classList.remove("hidden"); }
+function closeCredits() { document.getElementById("creditsScreen")?.classList.add("hidden"); }
+// Shared drawing of the REAL Smiley (glossy yellow ball, white eyes + sparkle, rosy cheeks, big open smile) for the Fan Art gallery.
+function fanSmiley(cx, cy, r) {
+  const g = "fsg" + Math.floor(Math.random() * 1e6);
+  return `<g>
+    <defs><radialGradient id="${g}" cx="35%" cy="30%" r="72%"><stop offset="0" stop-color="#fff9c2"/><stop offset=".52" stop-color="#ffd21f"/><stop offset="1" stop-color="#f59e00"/></radialGradient></defs>
+    <ellipse cx="${cx}" cy="${cy + r * 1.16}" rx="${r * 0.66}" ry="${r * 0.14}" fill="rgba(0,0,0,.25)"/>
+    <circle cx="${cx + r * 0.055}" cy="${cy + r * 0.12}" r="${r}" fill="rgba(0,0,0,.35)"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#${g})" stroke="#222" stroke-width="${r * 0.088}"/>
+    <ellipse cx="${cx - r * 0.62}" cy="${cy + r * 0.06}" rx="${r * 0.176}" ry="${r * 0.117}" fill="rgba(255,120,120,.55)"/>
+    <ellipse cx="${cx + r * 0.62}" cy="${cy + r * 0.06}" rx="${r * 0.176}" ry="${r * 0.117}" fill="rgba(255,120,120,.55)"/>
+    <ellipse cx="${cx - r * 0.4}" cy="${cy - r * 0.34}" rx="${r * 0.22}" ry="${r * 0.28}" fill="#fff" stroke="#222" stroke-width="${r * 0.059}"/>
+    <ellipse cx="${cx + r * 0.4}" cy="${cy - r * 0.34}" rx="${r * 0.22}" ry="${r * 0.28}" fill="#fff" stroke="#222" stroke-width="${r * 0.059}"/>
+    <ellipse cx="${cx - r * 0.46}" cy="${cy - r * 0.33}" rx="${r * 0.103}" ry="${r * 0.147}" fill="#222"/>
+    <ellipse cx="${cx + r * 0.34}" cy="${cy - r * 0.33}" rx="${r * 0.103}" ry="${r * 0.147}" fill="#222"/>
+    <circle cx="${cx - r * 0.474}" cy="${cy - r * 0.5}" r="${r * 0.059}" fill="#fff"/>
+    <circle cx="${cx + r * 0.326}" cy="${cy - r * 0.5}" r="${r * 0.059}" fill="#fff"/>
+    <path d="M ${cx - r * 0.47} ${cy + r * 0.36} Q ${cx} ${cy + r * 0.86} ${cx + r * 0.47} ${cy + r * 0.36}" fill="none" stroke="#222" stroke-width="${r * 0.088}" stroke-linecap="round"/>
+  </g>`;
+}
+// Shared drawing of the REAL Scythe (silver metal outlaw ball, white cowboy hat, angled dark eyes, smirk).
+function fanScythe(cx, cy, r) {
+  const g = "fsc" + Math.floor(Math.random() * 1e6);
+  const yb = cy - r * 0.82; // hat brim height
+  return `<g>
+    <defs><radialGradient id="${g}" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#e8e8f0"/><stop offset=".6" stop-color="#9aa0b0"/><stop offset="1" stop-color="#5c6272"/></radialGradient></defs>
+    <ellipse cx="${cx}" cy="${cy + r * 1.16}" rx="${r * 0.82}" ry="${r * 0.17}" fill="rgba(0,0,0,.25)"/>
+    <path d="M ${cx - r * 0.95} ${yb} Q ${cx - r * 0.95} ${yb - r * 0.95} ${cx} ${yb - r * 0.95} Q ${cx + r * 0.95} ${yb - r * 0.95} ${cx + r * 0.95} ${yb} Z" fill="#f5f5f5" stroke="#2a2a35" stroke-width="${r * 0.085}"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#${g})" stroke="#2a2a35" stroke-width="${r * 0.09}"/>
+    <ellipse cx="${cx - r * 0.36}" cy="${cy - r * 0.4}" rx="${r * 0.3}" ry="${r * 0.2}" fill="#fff" opacity=".5"/>
+    <ellipse cx="${cx - r * 0.32}" cy="${cy - r * 0.06}" rx="${r * 0.15}" ry="${r * 0.2}" fill="#2a2a35" transform="rotate(14 ${cx - r * 0.32} ${cy - r * 0.06})"/>
+    <ellipse cx="${cx + r * 0.32}" cy="${cy - r * 0.06}" rx="${r * 0.15}" ry="${r * 0.2}" fill="#2a2a35" transform="rotate(-14 ${cx + r * 0.32} ${cy - r * 0.06})"/>
+    <path d="M ${cx - r * 0.3} ${cy + r * 0.42} Q ${cx} ${cy + r * 0.64} ${cx + r * 0.3} ${cy + r * 0.36}" fill="none" stroke="#2a2a35" stroke-width="${r * 0.11}" stroke-linecap="round"/>
+    <ellipse cx="${cx}" cy="${yb}" rx="${r * 1.58}" ry="${r * 0.22}" fill="#f5f5f5" stroke="#2a2a35" stroke-width="${r * 0.085}"/>
+  </g>`;
 }
 let smileyDetail = "normal"; // low = plain ball, normal = cute, ultra = cooler
 let hackerPerms = false; // granted by secret code 2727 in Files: hack rights without admin
@@ -348,7 +460,7 @@ function clearMemory() {
   isAdmin = false;
   infiniteMoney = false;
   owned = { ultra: false, hats: { top: false, cap: false, cowboy: false, grad: false, helmet: false, beanie: false }, diamonds: false };
-  ownedApps = { installer: true, settings: true, files: true, games: true, terminal: true, phone: true, firewall: true, updates: true, smiley: true, test: true };
+  ownedApps = { installer: true, settings: true, files: true, games: true, terminal: true, phone: true, firewall: true, updates: true, achievements: true, smiley: true, test: true };
   hackerPerms = false;
   equippedHat = "none";
   playerCash = 0;
@@ -364,6 +476,8 @@ function clearMemory() {
       licenses: { ultra: false, hats: { top: false, cap: false, cowboy: false, grad: false, helmet: false, beanie: false }, admin: false, apps: {} },
       installed: (v && v.installed) || {},
       trash: (v && v.trash) || [],
+      achievements: [...unlockedAchievements],
+      owner: ownerAccount,
     }));
   } catch (e) {}
   location.reload();
@@ -383,11 +497,12 @@ function saveGame() {
       name: smileyMemory.name, insults: smileyMemory.insultCount, compliments: smileyMemory.complimentCount,
       feel: smileyFeel, slides, slideIdx, follow: smileyFollow, mailPopups,
       admin: isAdmin, infinite: infiniteMoney, history: appHistory.slice(-50),
-      color: smileyColor, banned: bankBanned, installed, trash: trashBin, apps: ownedApps, hacker: hackerPerms, wall: wallpaper, cmds: customCmds, censor: censorOn, games: [clickerWins, luckyWins], arcade: arcadeOn, dev: devMode, size: smileySize, scythe: scytheUnlocked, scytheDesk: scytheDesktopOn, suggestions: updateSuggestions, bannedCallers: [...bannedCallers], windowsEdition, mobileMode, mafiaDebt, mafiaDue, smileyAlive, burgerCash,
+      color: smileyColor, banned: bankBanned, installed, trash: trashBin, apps: ownedApps, hacker: hackerPerms, wall: wallpaper, cmds: customCmds, censor: censorOn, music: musicTrack, games: [clickerWins, luckyWins], arcade: arcadeOn, dev: devMode, size: smileySize, scythe: scytheUnlocked, scytheDesk: scytheDesktopOn, suggestions: updateSuggestions, bannedCallers: [...bannedCallers], windowsEdition, mobileMode, mafiaDebt, mafiaDue, smileyAlive, burgerCash, verity: (typeof verityCount !== "undefined" ? verityCount : 0), questMail: questMailArrived, custom: customAI, owner: ownerAccount,
     }));
   } catch (e) {}
 }
 function loadGame() {
+  mergeVaultUnlocks(); // achievements + owner survive refresh no matter what
   let d = null;
   try { d = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) {}
   if (!d) { applyVaultState(); return false; }
@@ -409,8 +524,10 @@ function loadGame() {
   smileyMemory.complimentCount = d.compliments || 0;
   if (d.feel) smileyFeel = { happy: d.feel.happy ?? 60, sad: d.feel.sad ?? 5, angry: d.feel.angry ?? 0 };
   if (Array.isArray(d.slides) && d.slides.length) { slides = d.slides; slideIdx = Math.min(d.slideIdx || 0, slides.length - 1); }
-  smileyFollow = false; // parked by the Off button (say "follow me" to change that)
+  smileyFollow = !!d.follow; // restored - parked only by Off button, not by refresh
   if (typeof d.mailPopups === "boolean") mailPopups = d.mailPopups;
+  if (typeof d.questMail === "boolean") questMailArrived = d.questMail;
+  if (d.custom && d.custom.name) { customAI = d.custom; ownedApps.dl_custom = true; }
   isAdmin = false; // admin panel ONLY from typing 593 in the terminal, every boot
   infiniteMoney = false;
   bankBanned = !!d.banned;
@@ -426,6 +543,7 @@ function loadGame() {
   if (typeof d.mafiaDue === "number") mafiaDue = d.mafiaDue;
   if (typeof d.smileyAlive === "boolean") smileyAlive = d.smileyAlive;
   if (typeof d.burgerCash === "number") burgerCash = d.burgerCash;
+  if (typeof d.owner === "boolean") ownerAccount = d.owner;
   if (mafiaDebt > 0) {
     mafiaDeadline = Date.now() + MAFIA_TIME; // restart 10-min clock on load
     clearInterval(mafiaTimerId);
@@ -434,7 +552,9 @@ function loadGame() {
   }
   if (d.scytheDesk) { scytheDesktopOn = true; document.getElementById("petScythe")?.classList.remove("hidden"); }
   if (d.censor) censorOn = true;
+  if (d.music === "crunchy" || d.music === "jazz") musicTrack = d.music;
   if (typeof d.dev === "boolean") devMode = d.dev;
+  if (typeof d.verity === "number") verityCount = d.verity;
   if (d.size) { smileySize = d.size; document.getElementById("smileyFace").style.zoom = smileySize; }
   if (Array.isArray(d.games)) { clickerWins = d.games[0] || 0; luckyWins = d.games[1] || 0; }
   if (d.owned) owned.diamonds = !!d.owned.diamonds;
@@ -469,6 +589,7 @@ function loadGame() {
   updateCashHud();
   applyPlainDisplay();
   updateMoodFace();
+  if (customAI) buildCustomPet(); // rebuild your custom buddy from the save
   return true;
 }
 // Smiley watches which app you open and learns your patterns.
@@ -513,9 +634,6 @@ function buyItem(item) {
   setSmileyMood("happy");
   smileyGesture("thumbsup");
   if (!isAdmin) smileySay("Purchased! Looking sharp!", 3000);
-  setSmileyMood("happy");
-  smileyGesture("thumbsup");
-  if (!isAdmin) smileySay("Purchased! Looking sharp!", 3000);
   renderBody("games"); // refresh shop buttons
   saveGame();
 }
@@ -552,6 +670,7 @@ function toggleInfinite() {
   if (sg) sg.textContent = infiniteMoney ? "Balance: ∞ (ADMIN)" : "Balance: $" + playerCash;
   smileySay(infiniteMoney ? "Infinite money: ON. Spend it all!" : "Infinite money: OFF. Back to earning.", 3000);
   saveGame();
+  if (infiniteMoney) unlockAchievement("infinite_money");
   if (openWins["admin"]) renderBody("admin");
   if (openWins["settings"]) renderBody("settings");
   if (openWins["games"]) renderBody("games");
@@ -561,7 +680,7 @@ function infinitePrice() {
   let t = 0;
   APPS.forEach((a) => { if (a.price && !ownedApps[a.id]) t += a.price; });
   if (!owned.ultra) t += ULTRA_PRICE;
-  const hp = { cap: 250, cowboy: 400, grad: 600, helmet: 650, beanie: 350 };
+  const hp = { top: 300, cap: 250, cowboy: 400, grad: 600, helmet: 650, beanie: 350 };
   Object.keys(hp).forEach((h) => { if (!owned.hats[h]) t += hp[h]; });
   return t;
 }
@@ -626,6 +745,7 @@ function unlockAdmin() {
   // Admin perk: cursor-following is one chat away (opt-in only).
   setTimeout(() => smileySay("Say 'follow me' and I'll trail your cursor. I see all.", 3500), 4200);
   saveGame();
+  unlockAchievement("become_admin");
   setTimeout(() => { try { openApp("admin"); } catch (err) { termPrint("admin window hiccup: " + err.message); } }, 800);
 }
 // Admin playground: pet him, dress him, cuss him out (uncensored).
@@ -635,9 +755,10 @@ function petSmiley() {
   smileyGesture("wave");
   smileySay("Purrr... *happy ball noises* ...that tickles!", 3000);
   smileyLog("🤚 *pet pet*", "🥰 Oooh! Yes! Right there! Best admin ever!");
+  unlockAchievement("pet_smiley");
 }
 function toggleFurry() {
-  if (!isAdmin) { smileySay("Outfits unlock in Admin mode! (593 in Terminal)", 3000); return; }
+  if (!isAdmin && !owned.ultra) { smileySay("Outfits unlock in Admin mode! (593 in Terminal)", 3000); return; }
   const face = document.getElementById("smileyFace");
   const on = face.dataset.outfit !== "furry";
   face.dataset.outfit = on ? "furry" : "none";
@@ -695,6 +816,7 @@ function equipHat(name, silent) {
   const picker = document.getElementById("hatMsg");
   if (picker) picker.textContent = "Wearing: " + name;
   if (name !== "none" && !silent) smileySay("Nice hat! Ultra style!", 2500);
+  if (name !== "none") unlockAchievement("wear_hat");
   saveGame();
 }
 // Top hat is FREE in Settings - no shop needed.
@@ -871,6 +993,7 @@ function renderRoomPets() {
     if (ownedApps.dl_clippy) crew.push(["📎", "Clippy"]);
     if (ownedApps.dl_byte) crew.push(["🤖", "Byte"]);
     if (ownedApps.liam) crew.push(["🧠", "Liam"]);
+    if (ownedApps.dl_custom && typeof customAI !== "undefined" && customAI) crew.push([customAI.emoji, customAI.name]);
   }
   if (typeof scytheUnlocked !== "undefined" && scytheUnlocked) crew.push(["🤠", "Scythe"]);
   box.innerHTML = crew.map(([e, n]) => `<div class="rp">${e}<span>${n}</span></div>`).join("");
@@ -1251,7 +1374,7 @@ function openApp(id) {
     <button>X</button></div>
     <div class="win-body" id="body-${id}"></div>`;
   win.querySelector("button").onclick = () => closeApp(id);
-  win.onmousedown = () => focusWin(id);
+  win.onpointerdown = () => focusWin(id);
   makeDraggable(win, win.querySelector(".win-header"));
   document.getElementById("windows").appendChild(win);
   openWins[id] = win;
@@ -1259,6 +1382,8 @@ function openApp(id) {
   renderTasks();
   smileyCheckBrowser(); // Smiley reacts when windows open/close
   smileyPredicts(id); // he learns your patterns (Admin/Ultra)
+  unlockAchievement("open_app");
+  if (id === "browser") unlockAchievement("browser_visit");
 }
 
 function closeApp(id) {
@@ -1299,30 +1424,70 @@ function makeDraggable(win, handle) {
   handle.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     active = true;
-    handle.setPointerCapture?.(e.pointerId);
-    ox = e.clientX - win.offsetLeft;
-    oy = e.clientY - win.offsetTop;
+    try { handle.setPointerCapture?.(e.pointerId); } catch (_) {}
+    const r = win.getBoundingClientRect();
+    ox = e.clientX - r.left;
+    oy = e.clientY - r.top;
     const move = (ev) => {
       if (!active) return;
       ev.preventDefault();
-      const deskW = document.getElementById("desktop").clientWidth;
-      const deskH = document.getElementById("desktop").clientHeight;
-      const maxX = Math.max(0, deskW - 80);
-      const maxY = Math.max(0, deskH - 40);
-      win.style.left = Math.max(-win.offsetWidth + 80, Math.min(ev.clientX - ox, maxX)) + "px";
-      win.style.top = Math.max(0, Math.min(ev.clientY - oy, maxY)) + "px"; // full up/down freedom
+      const wrapR = document.getElementById("windows").getBoundingClientRect();
+      const b = clampWinBounds(win, handle);
+      // viewport-space desire, then convert to #windows-local coords
+      let wantX = ev.clientX - ox - wrapR.left;
+      let wantY = ev.clientY - oy - wrapR.top;
+      win.style.left = Math.max(b.minX, Math.min(wantX, b.maxX)) + "px";
+      win.style.top = Math.max(b.minY, Math.min(wantY, b.maxY)) + "px";
     };
     const up = (ev) => {
       active = false;
-      handle.releasePointerCapture?.(ev.pointerId);
+      try { handle.releasePointerCapture?.(ev.pointerId); } catch (_) {}
       document.removeEventListener("pointermove", move);
       document.removeEventListener("pointerup", up);
+      document.removeEventListener("pointercancel", up);
     };
     document.addEventListener("pointermove", move);
     document.addEventListener("pointerup", up);
     document.addEventListener("pointercancel", up);
   });
 }
+// Shared drag bounds: desktop keeps an 80px grab sliver, small screens
+// (mobile, <=820px like the CSS breakpoint) keep popups FULLY on-screen
+// so touch users can never lose a window off the edge.
+function clampWinBounds(win, handle) {
+  const desk = document.getElementById("desktop");
+  const task = document.getElementById("taskbar");
+  const deskR = desk.getBoundingClientRect();
+  const wrapR = document.getElementById("windows").getBoundingClientRect();
+  const taskH = task ? task.offsetHeight : 40;
+  const headH = (handle && handle.offsetHeight) || win.querySelector(".win-header")?.offsetHeight || 30;
+  const leftEdge = deskR.left - wrapR.left; // desktop left in wrap-local coords
+  const topEdge = deskR.top - wrapR.top; // desktop top in wrap-local coords
+  if (deskR.width <= 820) {
+    // mobile: full containment - whole popup stays inside the usable desktop
+    const minX = leftEdge;
+    const maxX = Math.max(minX, leftEdge + deskR.width - win.offsetWidth);
+    const minY = topEdge;
+    const maxY = Math.max(minY, topEdge + deskR.height - taskH - win.offsetHeight);
+    return { minX, maxX, minY, maxY };
+  }
+  // desktop: keep an 80px sliver visible, header always grabbable, never under taskbar
+  const minX = -win.offsetWidth + 80;
+  const maxX = Math.max(minX, deskR.width - 80);
+  const minY = topEdge;
+  const maxY = Math.max(minY, deskR.height - taskH - headH - (wrapR.top - deskR.top));
+  return { minX, maxX, minY, maxY };
+}
+// Keep every open popup on-screen after rotate/resize (never lost off-screen).
+window.addEventListener("resize", () => {
+  try {
+    Object.values(openWins).forEach((win) => {
+      const b = clampWinBounds(win);
+      win.style.left = Math.max(b.minX, Math.min(win.offsetLeft, b.maxX)) + "px";
+      win.style.top = Math.max(b.minY, Math.min(win.offsetTop, b.maxY)) + "px";
+    });
+  } catch (_) {}
+});
 
 // --- Start menu ---
 const startMenu = document.getElementById("startMenu");
@@ -1463,7 +1628,12 @@ function renderBody(id) {
         <button onclick="textScammer()">Start</button>
         <button onclick="blockScammer()">Block</button>
       </div>
-      <p style="color:#888;font-size:12px">Warning: unknown numbers call YOU. Decline them!</p>`;
+      <div class="game-box">
+        <h4>🚫 Ban list (<span id="banCount">0</span>)</h4>
+        <div class="call-log" id="banList"></div>
+        <p style="color:#888;font-size:12px">Banned numbers can never call you again. Unban to let them back.</p>
+      </div>
+      <p style="color:#888;font-size:12px">Warning: unknown numbers call YOU. Decline or ban them!</p>`;
     renderPhone();
     clearInterval(window._mafiaTick);
     window._mafiaTick = setInterval(() => {
@@ -1488,8 +1658,211 @@ function renderBody(id) {
       <p style="color:#888;font-size:12px">Tip: tell Smiley "swiper, no swiping" to block.</p>`;
     renderThreats();
   }
+  if (id === "achievements") {
+    // Achievements: free forever app. Progress lives in the wipe-proof vault.
+    const unlockedCount = ACHIEVEMENTS.filter((a) => unlockedAchievements.has(a.id)).length;
+    const pct = Math.round((unlockedCount / ACHIEVEMENTS.length) * 100);
+    b.innerHTML = `
+      <h3>🏆 Achievements</h3>
+      ${ownerAccount ? `<div class="ach-owner">👑 LIAM'S ACCOUNT — OWNER</div>` : ""}
+      <p style="font-size:12px;color:#555">${unlockedCount} / ${ACHIEVEMENTS.length} unlocked (${pct}%). These save <b>FOREVER</b> — they survive refresh, Clear Memory, and everything else.</p>
+      <div class="ach-progress"><div class="ach-progress-fill" style="width:${pct}%"></div></div>
+      <div class="ach-grid">
+        ${ACHIEVEMENTS.map((a) => {
+          const has = unlockedAchievements.has(a.id);
+          return `<div class="ach-card ${has ? "unlocked" : "locked"}" title="${a.desc}">
+            <div class="ach-icon">${has ? a.icon : "🔒"}</div>
+            <div class="ach-name">${a.name}</div>
+            <div class="ach-desc">${has ? a.desc : "Locked"}</div>
+          </div>`;
+        }).join("")}
+      </div>
+      ${isAdmin ? `<button onclick="resetAchievements()" style="margin-top:8px">↺ Reset achievements (admin)</button>` : ""}`;
+  }
+  if (id === "fanart") {
+    // Fan Art: $5 app. Hand-drawn SVG pieces from the community. Smiley is drawn like the REAL in-game one.
+    const ART = [
+      { t: "Meet the Owner", a: "Liam (the owner)", svg: `<svg viewBox="0 0 120 90">
+        <defs>
+          <linearGradient id="owbg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef5ff"/><stop offset="1" stop-color="#c9dcf2"/></linearGradient>
+          <linearGradient id="owshirt" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4a80bd"/><stop offset="1" stop-color="#2b5486"/></linearGradient>
+          <linearGradient id="owhair" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7e5a3a"/><stop offset="1" stop-color="#5a3d26"/></linearGradient>
+        </defs>
+        <rect width="120" height="90" fill="url(#owbg)"/>
+        <rect x="6" y="9" width="26" height="19" rx="2.5" fill="#fff" stroke="#b9c9dc"/>
+        <rect x="8.5" y="11.5" width="21" height="14" fill="#ffd93b"/>
+        <circle cx="19" cy="18.5" r="4" fill="#fff"/>
+        <path d="M8.5 25.5 l6 -6 l5 5 l4 -4 l6 5" stroke="#8a6a2a" stroke-width="1" fill="none"/>
+        <rect x="98" y="62" width="15" height="15" rx="2" fill="#b5651d"/>
+        <path d="M105 62 q-11 -6 -7 -19 q9 4 7 19 q5 -13 13 -15 q2 13 -7 15z" fill="#3f9d55"/>
+        <ellipse cx="47" cy="87" rx="31" ry="5" fill="rgba(0,0,0,.12)"/>
+        <path d="M17 90 q0 -27 30 -27 q30 0 30 27z" fill="url(#owshirt)"/>
+        <path d="M33 65 q14 12 28 0 l-5 -3 q-9 8 -18 0z" fill="#eef4fb"/>
+        <path d="M45 70 l3 5 l3 -5 l-3 -3z" fill="#c0392b"/>
+        <path d="M45 75 l6 0 l4 12 l-7 6 l-7 -6z" fill="#c0392b"/>
+        <rect x="39" y="50" width="15" height="15" rx="5" fill="#e8b98f"/>
+        <ellipse cx="31.5" cy="35" rx="3.6" ry="4.2" fill="#eec19c"/>
+        <ellipse cx="62.5" cy="35" rx="3.6" ry="4.2" fill="#eec19c"/>
+        <ellipse cx="47" cy="34" rx="16" ry="18" fill="#f3ccaa"/>
+        <path d="M30 33 q-2 -22 17 -22 q19 0 17 22 q-2 -7 -5 -9 q-2 -7 -12 -7 q-10 0 -12 7 q-3 2 -5 9z" fill="url(#owhair)"/>
+        <path d="M34 21 q7 -6 14 -6 q8 0 13 6 q-3 -2 -6 -2 q-3 2 -7 2 q-4 0 -7 -2 q-4 0 -7 2z" fill="#8a6642"/>
+        <ellipse cx="41" cy="34" rx="3.2" ry="2.6" fill="#fff" stroke="#3a2a1a" stroke-width=".7"/>
+        <ellipse cx="53" cy="34" rx="3.2" ry="2.6" fill="#fff" stroke="#3a2a1a" stroke-width=".7"/>
+        <circle cx="41" cy="34.3" r="1.5" fill="#3a2a1a"/>
+        <circle cx="53" cy="34.3" r="1.5" fill="#3a2a1a"/>
+        <circle cx="40.4" cy="33.6" r=".55" fill="#fff"/>
+        <circle cx="52.4" cy="33.6" r=".55" fill="#fff"/>
+        <path d="M37 29.5 q4 -2.2 7.5 -0.4 M49.5 29.1 q4 -2.2 7.5 0.4" stroke="#5a3d26" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+        <path d="M47 35.5 q-1.4 3 1.4 3.2" stroke="#d9a878" stroke-width="1" fill="none" stroke-linecap="round"/>
+        <path d="M41.5 42.5 q5.5 5.5 11 0" stroke="#a05a3a" stroke-width="1.7" fill="none" stroke-linecap="round"/>
+        <ellipse cx="45" cy="44.6" rx="5" ry="2" fill="rgba(255,120,120,.35)"/>
+        <g transform="translate(62,50) rotate(3)">
+          <path d="M27 -6 v-7" stroke="#8a8a8a" stroke-width="1.2"/>
+          <rect x="0" y="0" width="52" height="34" rx="4" fill="#fff" stroke="#9aa7b5" stroke-width="1.1"/>
+          <rect x="0" y="0" width="52" height="10" rx="4" fill="#d93a3a"/>
+          <text x="26" y="7.3" text-anchor="middle" font-size="5.2" fill="#fff" font-weight="bold" letter-spacing=".2">EMPLOYEE</text>
+          <text x="26" y="21" text-anchor="middle" font-size="11.5" fill="#1a1a1a" font-weight="bold">Liam</text>
+          <text x="26" y="30.5" text-anchor="middle" font-size="5.8" fill="#4a4a4a">Meet the owner.</text>
+          <circle cx="46" cy="5" r="1.6" fill="#f4c7c7"/>
+        </g>
+      </svg>` },
+      { t: "Smiley at Sunset", a: "xX_ballfan_Xx", svg: `<svg viewBox="0 0 120 90">
+        <defs>
+          <linearGradient id="sky2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c3e70"/><stop offset=".42" stop-color="#ff8a5c"/><stop offset=".72" stop-color="#ffcf7a"/></linearGradient>
+          <linearGradient id="sea2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6a35c"/><stop offset="1" stop-color="#2f3d73"/></linearGradient>
+        </defs>
+        <rect width="120" height="90" fill="url(#sky2)"/>
+        <circle cx="84" cy="45" r="20" fill="#ffe066" opacity=".22"/>
+        <circle cx="84" cy="45" r="12.5" fill="#fff3b0"/>
+        <ellipse cx="26" cy="16" rx="15" ry="4.5" fill="#fff" opacity=".22"/>
+        <ellipse cx="58" cy="11" rx="11" ry="3.5" fill="#fff" opacity=".18"/>
+        <ellipse cx="16" cy="24" rx="10" ry="3" fill="#fff" opacity=".14"/>
+        <path d="M20 30 q3 -3 6 0 M30 26 q3 -3 6 0" stroke="#3b2c22" stroke-width="1.1" fill="none" stroke-linecap="round" opacity=".8"/>
+        <rect y="57" width="120" height="33" fill="url(#sea2)"/>
+        <rect y="57" width="120" height="1.3" fill="#ffe4b0" opacity=".7"/>
+        <path d="M76 62 h18 M79 66 h13 M82 70 h8" stroke="#ffe9b8" stroke-width="1.4" opacity=".55"/>
+        <path d="M8 63 h12 M10 67 h9" stroke="#ffe9b8" stroke-width="1.2" opacity=".4"/>
+        ${fanSmiley(34, 50, 13)}
+        <rect x="14" y="64" width="42" height="5" rx="1.5" fill="#7a5230"/>
+        <rect x="16" y="69" width="4.5" height="10" fill="#5e3f24"/>
+        <rect x="50" y="69" width="4.5" height="10" fill="#5e3f24"/>
+        <ellipse cx="35" cy="80" rx="20" ry="3" fill="rgba(0,0,0,.18)"/>
+      </svg>` },
+      { t: "Clippy's Big Day", a: "paperclip_pal", svg: `<svg viewBox="0 0 120 90">
+        <defs><linearGradient id="cbbg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef7ff"/><stop offset="1" stop-color="#d3e6f8"/></linearGradient></defs>
+        <rect width="120" height="90" fill="url(#cbbg)"/>
+        <rect y="72" width="120" height="18" fill="#c3d8ec"/>
+        <rect x="14" y="10" width="3" height="6" fill="#ff6b6b" transform="rotate(22 15.5 13)"/>
+        <rect x="100" y="14" width="3" height="6" fill="#4dabf7" transform="rotate(-28 101.5 17)"/>
+        <rect x="106" y="30" width="3" height="6" fill="#ffd43b" transform="rotate(38 107.5 33)"/>
+        <rect x="34" y="8" width="3" height="6" fill="#b197fc" transform="rotate(-18 35.5 11)"/>
+        <circle cx="22" cy="32" r="2" fill="#b197fc"/>
+        <circle cx="92" cy="9" r="2.2" fill="#69db7c"/>
+        <circle cx="70" cy="20" r="1.8" fill="#ffa94d"/>
+        <path d="M40 72 h40 l-4 -18 h-32z" fill="#ffd43b" stroke="#e0a800" stroke-width="1.5"/>
+        <path d="M43 54 q17 -14 34 0" fill="#ffe9a8"/>
+        <g transform="translate(40,16)">
+          <path d="M8 4 v6 a9 9 0 0 1 0 18 v4 a9 9 0 0 1 0 18 v5" stroke="#8fb0d2" stroke-width="7.5" fill="none" stroke-linecap="round"/>
+          <path d="M8 4 v6 a9 9 0 0 1 0 18 v4 a9 9 0 0 1 0 18 v5" stroke="#cfe1f4" stroke-width="3" fill="none" stroke-linecap="round"/>
+        </g>
+        <ellipse cx="44" cy="35" rx="3.2" ry="3.8" fill="#fff" stroke="#333" stroke-width=".8"/>
+        <ellipse cx="54" cy="35" rx="3.2" ry="3.8" fill="#fff" stroke="#333" stroke-width=".8"/>
+        <circle cx="45" cy="35.4" r="1.5" fill="#222"/>
+        <circle cx="55" cy="35.4" r="1.5" fill="#222"/>
+        <circle cx="44" cy="34" r=".6" fill="#fff"/>
+        <circle cx="54" cy="34" r=".6" fill="#fff"/>
+        <path d="M44 42 q5 4.5 10 0" stroke="#333" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+        ${fanSmiley(94, 52, 14)}
+        <text x="24" y="88" text-anchor="middle" font-size="7" fill="#5b7a99" font-weight="bold">it me, clippy!</text>
+      </svg>` },
+      { t: "Byte x Smiley", a: "robot_romance", svg: `<svg viewBox="0 0 120 90">
+        <defs><radialGradient id="lxg" cx="50%" cy="42%" r="62%"><stop offset="0" stop-color="#fff2f8"/><stop offset="1" stop-color="#ecd6ff"/></radialGradient></defs>
+        <rect width="120" height="90" fill="url(#lxg)"/>
+        <g opacity=".5" fill="#ff8fb0"><circle cx="18" cy="20" r="2"/><circle cx="102" cy="26" r="2.4"/><circle cx="96" cy="70" r="1.8"/><circle cx="24" cy="66" r="2.2"/></g>
+        <path d="M60 17 c-2.4 -7 7 -9 7 -2.5 c0 -6.5 9.4 -4.5 7 2.5 c-1.8 4.6 -7 8 -7 8 s-5.2 -3.4 -7 -8z" fill="#ff5a8a"/>
+        <g>
+          <rect x="68" y="38" width="34" height="31" rx="9" fill="#a0c4ff" stroke="#5b7fd1" stroke-width="2.5"/>
+          <rect x="72" y="34" width="26" height="8" rx="3.5" fill="#c3dbff" stroke="#5b7fd1" stroke-width="2"/>
+          <circle cx="80" cy="53" r="3.6" fill="#222"/><circle cx="91" cy="53" r="3.6" fill="#222"/>
+          <circle cx="78.8" cy="51.8" r="1.2" fill="#fff"/><circle cx="89.8" cy="51.8" r="1.2" fill="#fff"/>
+          <rect x="79" y="61" width="13" height="3" rx="1.5" fill="#222"/>
+          <path d="M85 34 v-6.5" stroke="#5b7fd1" stroke-width="2"/><circle cx="85" cy="25" r="3.2" fill="#ffd43b" stroke="#5b7fd1" stroke-width="1.6"/>
+          <path d="M75 69 v6 M95 69 v6" stroke="#5b7fd1" stroke-width="3" stroke-linecap="round"/>
+          <path d="M68 50 h-6 M102 50 h6" stroke="#5b7fd1" stroke-width="2.4" stroke-linecap="round"/>
+        </g>
+        ${fanSmiley(38, 52, 16)}
+      </svg>` },
+      { t: "Scythe Duel", a: "yeehaw_99", svg: `<svg viewBox="0 0 120 90">
+        <defs><linearGradient id="dsk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a2f1b"/><stop offset=".62" stop-color="#c9772f"/><stop offset="1" stop-color="#e8a45a"/></linearGradient></defs>
+        <rect width="120" height="90" fill="url(#dsk)"/>
+        <circle cx="60" cy="30" r="26" fill="#ffd67a" opacity=".18"/>
+        <circle cx="60" cy="30" r="14" fill="#ffe9a8" opacity=".85"/>
+        <path d="M8 74 v-22 M8 60 h-5 v-7 M8 58 h5 v-6" stroke="#3f7a4d" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <path d="M112 74 v-16 M112 64 h-4 v-6" stroke="#357043" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+        <rect y="72" width="120" height="18" fill="#7a4a1e"/>
+        <rect y="72" width="120" height="2" fill="#a06a33"/>
+        <path d="M22 78 q6 -3 12 0 M86 80 q6 -3 12 0" stroke="#5e3a18" stroke-width="1.4" fill="none" opacity=".55"/>
+        <ellipse cx="40" cy="70" rx="18" ry="4" fill="rgba(0,0,0,.18)"/>
+        <ellipse cx="82" cy="70" rx="18" ry="4" fill="rgba(0,0,0,.18)"/>
+        ${fanSmiley(40, 52, 15)}
+        ${fanScythe(82, 52, 15)}
+        <text x="60" y="44" text-anchor="middle" font-size="9" fill="#fff2cf" font-weight="bold">VS</text>
+        <text x="60" y="86" text-anchor="middle" font-size="7.5" fill="#ffe9a8" font-weight="bold">YEEHAW</text>
+      </svg>` },
+      { t: "The Outlaw, Scythe", a: "hex_rodeo", svg: `<svg viewBox="0 0 120 90">
+        <defs><linearGradient id="otbg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#241a2e"/><stop offset="1" stop-color="#7a3f6a"/></linearGradient></defs>
+        <rect width="120" height="90" fill="url(#otbg)"/>
+        <circle cx="60" cy="34" r="30" fill="#ff9ecd" opacity=".12"/>
+        <circle cx="90" cy="24" r="9" fill="#ffd9ec" opacity=".8"/>
+        <g opacity=".5" fill="#fff"><circle cx="22" cy="22" r="1.4"/><circle cx="36" cy="14" r="1"/><circle cx="102" cy="40" r="1.2"/></g>
+        <path d="M10 84 q0 -12 12 -12 q12 0 12 12z" fill="#4a2b52" opacity=".8"/>
+        <path d="M96 84 q0 -9 9 -9 q9 0 9 9z" fill="#4a2b52" opacity=".7"/>
+        <rect y="80" width="120" height="10" fill="#3a2340"/>
+        <ellipse cx="60" cy="79" rx="22" ry="4" fill="rgba(0,0,0,.3)"/>
+        ${fanScythe(60, 50, 19)}
+        <text x="60" y="88" text-anchor="middle" font-size="8" fill="#ffd9ec" font-weight="bold" letter-spacing="1">SCYTHE</text>
+      </svg>` },
+      { t: "The Mafia Nightmare", a: "sleepy_gamer", svg: `<svg viewBox="0 0 120 90">
+        <defs><radialGradient id="nbg" cx="50%" cy="38%" r="72%"><stop offset="0" stop-color="#3a1414"/><stop offset="1" stop-color="#0b0404"/></radialGradient></defs>
+        <rect width="120" height="90" fill="url(#nbg)"/>
+        <ellipse cx="54" cy="80" rx="40" ry="9" fill="#000" opacity=".55"/>
+        <path d="M28 84 q0 -36 26 -36 q26 0 26 36z" fill="#141414"/>
+        <ellipse cx="54" cy="40" rx="16" ry="17" fill="#1d1d1d"/>
+        <path d="M38 34 q16 -13 32 0 q-5 -4 -16 -4 q-11 0 -16 4z" fill="#2c2c2c"/>
+        <ellipse cx="48" cy="41" rx="2.4" ry="2.8" fill="#c0392b"/>
+        <ellipse cx="60" cy="41" rx="2.4" ry="2.8" fill="#c0392b"/>
+        <circle cx="48.6" cy="41.4" r=".9" fill="#ff9a9a"/>
+        <circle cx="60.6" cy="41.4" r=".9" fill="#ff9a9a"/>
+        <path d="M46 52 q8 -5 16 0" stroke="#7a7a7a" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+        <path d="M4 24 q40 -18 112 -6" stroke="#c0392b" stroke-width="5" fill="none" opacity=".45"/>
+        ${fanSmiley(96, 66, 12)}
+        <text x="60" y="13" text-anchor="middle" font-size="9" fill="#ff8080" font-weight="bold" letter-spacing="1">run.</text>
+      </svg>` },
+      { t: "Self Portrait", a: "smiley_himself", svg: `<svg viewBox="0 0 120 90">
+        <defs><linearGradient id="stg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fffbf0"/><stop offset="1" stop-color="#efe0c4"/></linearGradient></defs>
+        <rect width="120" height="90" fill="url(#stg)"/>
+        <rect y="76" width="120" height="14" fill="#e3d0b0"/>
+        <ellipse cx="36" cy="78" rx="17" ry="3.4" fill="rgba(0,0,0,.12)"/>
+        <path d="M80 20 l-6 20 M100 20 l6 20 M90 62 v18" stroke="#b07a3a" stroke-width="2.6" stroke-linecap="round"/>
+        <path d="M66 20 l48 0 l0 38 l-48 0z" fill="#fff" stroke="#b07a3a" stroke-width="3"/>
+        ${fanSmiley(90, 39, 12)}
+        <path d="M74 50 q16 5 32 0" stroke="#b07a3a" stroke-width="1" fill="none" opacity=".5"/>
+        ${fanSmiley(34, 56, 15)}
+        <path d="M47 49 l12 -10" stroke="#b07a3a" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M59 39 l5 -5" stroke="#e03131" stroke-width="3.4" stroke-linecap="round"/>
+      </svg>` },
+    ];
+    b.innerHTML = `
+      <h3>🖼️ Fan Art</h3>
+      <p style="font-size:12px;color:#666">Hand-drawn fan art from the Smiley AI community. 🎨</p>
+      <div class="fan-grid">
+        ${ART.map((x) => `<div class="fan-card"><div class="fan-art">${x.svg}</div><div class="fan-cap"><b>${x.t}</b><br><span>by ${x.a}</span></div></div>`).join("")}
+      </div>
+      <p style="font-size:11px;color:#999">Want your art here? Yell at Smiley.</p>`;
+  }
   if (id === "updates") {
     // Update Board: what is new in Smiley AI.
+    unlockAchievement("read_updates", true);
     b.innerHTML = `
       <h3>📋 Update Board</h3>
       <div class="update-video">
@@ -1498,46 +1871,57 @@ function renderBody(id) {
         <div class="hammer-rest"><div class="hammer-handle"></div><div class="hammer-head"></div></div>
         <div class="video-caption">Hey, hello, there's a new update. I'm right now building it.</div>
       </div>
-      <div class="call-log" style="max-height:220px">
-        <div><b>v2.18</b> - Cinematic mafia death: the man SQUEEZES Smiley to crush him (fingers clench, thumb closes), blood splatters, then the broken screen SLIDES OFF revealing a burger grill scene with flickering flames and rising smoke. Smiley's death is now fully animated.</div>
-        <div><b>v2.17</b> - Mafia aftermath deepened: Smiley dies with a BLOOD SPLATTER burst, the pixel hand is much bigger, the mafia takes ALL your apps (you have nothing until you reinstall, just like Smiley), and reviving him brings everything back with a mixed reaction - overjoyed to be alive, then MAD at you. Fixed: burger cash no longer caps at $10k (couldn't afford both), blocking alerts replaced with inline messages.</div>
-        <div><b>v2.16</b> - MAFIA FEATURE: call the mafia in Phone for $5,000 (owe $6,000 in 10 min). Don't pay? A pixel hand breaks the screen, grabs Smiley, he screams "WHAT THE FUCK DID YOU DO" and gets crushed to death. Sell burgers to earn a new computer ($10,000) + Installer ($500) to bring him back. Admin panel has a "Trigger Mafia" button. New SmileyTube warning video. Fixed: burger cash no longer caps at $10k (couldn't afford both), blocking alerts replaced with inline messages. Mobile popups shrunk to 78vw x 34vh (were huge).</div>
-        <div><b>v2.15</b> - CRITICAL screen fix: Smiley was rendering off-screen and invisible (a CSS detail rule accidentally set him to "position: relative", pushing him 763px below the fold and making the page scroll). Now absolute-positioned and locked on-screen. Also: saves now actually persist across refresh (Windows Edition, bans, hats, suggestions survive - a wipe-on-load bug was deleting them before they could load), and desktop clips to the screen.</div>
-        <div><b>v2.14</b> - Deep computer detail pass: layered desktop with noise + vignette, glassy bevelled icons that lift on hover, glass window frames with pretty custom scrollbars, glossy taskbar + polished clock/start button, rounded start menu with slide hover, refined boot screen (glowing logo, spinner, shadowed console).</div>
-        <div><b>v2.13</b> - Hats are now HAND-MADE (CSS-drawn, no emoji): top hat with brim, blue cap, wide-brim cowboy, mortarboard grad with swinging tassel, safety helmet, knit beanie with pom — each with its own float animation. Bug fixes: mitt hands verified working (thumb nub, no emoji), removed dead hatband rule, removed duplicate keyframe.</div>
-        <div><b>v2.12</b> - Smiley & hand mega-update: 20 hand gestures (wave, thumbs, point, flip, clap, high-five, fist bump, peace, shrug, rock-on, OK, muscle, pray, snap, jazz hands, heart, salute, money, sleepy) each with its own hand animation — clap/shrug/pray/jazz/heart use BOTH hands. Gesture picker grid inside the Smiley AI app. Custom mitt hands (no pointy emoji), cool two-part wave, per-gesture timing.</div>
-        <div><b>v2.11</b> - Big bug/detail pass: animated hats for ALL six (top hat sways, cap wiggles, cowboy tips, grad bounces with tassel, helmet steadies, beanie squashes + sparkles). Richer computer: detailed wallpaper, glowing hover icons, glass windows, gradient taskbar. Fixed: renderBody no longer crashes on closed windows (was breaking ban + shop refresh), caller bans now persist after refresh, removed dead code, boot screen gets a live progress bar. Verified: all 91 buttons wired, no console errors, no undefined text in any app.</div>
-        <div><b>v2.10</b> - Drag Smiley off screen and he vanishes until you open his app. The other AIs notice and react.</div>
-        <div><b>v2.9</b> - Bug squash + features: ban callers for good, taller/resizable game window, animated wallpapers (Aurora/Grid/Stars), Smiley can break out of the screen, pets hang out in the put-down room, sip the coffee.</div>
-        <div><b>v2.8</b> - Future Update box: players submit ideas; admins see "Future Feature Pitch" and read what everyone wants.</div>
-        <div><b>v2.7</b> - Scythe vs Smiley LIVE FIGHT: a real animated brawl on live cam — punches, impact stars, camera shake. SmileyTube now has 20 videos.</div>
-        <div><b>v2.6</b> - Scythe rescue arc: drag her apology note into a corner to undo everything. She gets a white cowboy hat app — talk to her, or move her onto the desktop where she and Smiley argue constantly.</div>
-        <div><b>v2.5</b> - ScytheAI revealed as Smiley's ex (gunslinging outlaw, not a yeehaw caricature). Call her in the Phone for a live divorce fight. Starter cash bumped to $5,000.</div>
-        <div><b>v2.4</b> - ScytheAI hunts the web: "she deletes files; and she's eyeing yours."</div>
-        <div><b>v2.3</b> - Ansly finally got ScytheAI (reviewed, 1 star, we're doomed). Scythe run takes Smiley + Installer, ends on cyan.</div>
-        <div><b>v2.2</b> - Rival pets move in: paperclip Clippy, blue-eyed Byte, beatboxing purple Liam. They argue, steal Game Boys, get trashed with secret endings. SmileyTube hits 12 videos. 5932727 super-code. Silent Put Down, random hellos.</div>
-        <div><b>v2.1</b> - He waits when you leave his screen: "are you making a new update?" Full history below.</div>
-        <div><b>v2.0</b> - Update video (thinker Smiley on bricks), Paint beret doll, Slides suit uniform.</div>
-        <div><b>v1.9</b> - Cat ears replace the furry suit. Ultra goes precious-normal. Test Room + dev mode + outside lab. Mail quest unlocks dev. Censor mode.</div>
-        <div><b>v1.8</b> - SmileyTube reviews, talking ghost story, wave-back radar, quiet-smile rule, silent admin freebies, infinite money toggle.</div>
-        <div><b>v1.7</b> - Firewall + Swiper-blocking, hostile whiteout hacks, Steam Support rescue, scam texts hunting 593, $1M Ultra, 2727 backdoor, DIY custom commands.</div>
-        <div><b>v1.6</b> - Installer + Trash apps, paywalled desktop, Buy Infinite, elite HACK commands, Verity rework (real BSOD, angry, remembers count), jazz music, talk blips, role greetings.</div>
-        <div><b>v1.5</b> - Phone + spam calls (answer = corruption), E for existential dread, bank loans + magic words, Terminal HACK MODE, obeyed commands.</div>
-        <div><b>v1.4</b> - Say VERITY five times: explosion, crash, "Valuable AI gone."</div>
-        <div><b>v1.3</b> - Hats, whole-computer Ultra detail. Crown and gold removed forever. Admin lives at 593 in the Terminal.</div>
-        <div><b>v1.2</b> - Paint + Slides with uniforms, cursor following, fake cash, Games app, $9,000 refund file.</div>
-        <div><b>v1.1</b> - Boot-style vault, Settings detail levels (low, normal, ultra).</div>
-        <div><b>v1.0</b> - Mood brain + offline AI chat. Make him furious and he takes ROOT and deletes your computer.</div>
-        <div><b>v0.9</b> - Self-aware: watches your mouse, reads your typing. Sad, concerned, angry. Pop-up left hand.</div>
-        <div><b>v0.8</b> - Delete ending goes dark: "File was corrupted." / "??? Reboot."</div>
-        <div><b>v0.7</b> - Closable pop-ups. Double-click Smiley, find Delete. Delete him, meet blue screen.</div>
-        <div><b>v0.6</b> - Real animated body: moods, blinking, waddling. Arms and shoes came and went. Round ball forever.</div>
-        <div><b>v0.5</b> - Corner rules + free roam. Say VERITY for blue screen + demonic Smiley. Don't.</div>
-        <div><b>v0.4</b> - Smiley AI desktop pet arrives (Canito-style buddy + browser helper). Press C to chat.</div>
-        <div><b>v0.3</b> - Fake computer desktop: boot, Files, Mail, Terminal, Browser, and a locked Vault (4277).</div>
-        <div><b>v0.2</b> - Got a face: eyes, a smile, and corners to live in.</div>
-        <div><b>v0.1</b> - Just a wire. A circle with no face. The dream begins.</div>
+      <p style="font-size:12px;margin:2px 0 6px">Click any update to watch its trailer — Smiley narrates it out loud. ▶</p>
+      <div class="call-log up-list" style="max-height:260px">
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.27</b> - NO MORE SMASHING: the screen-smashing and glass-shard repair are GONE (it got annoying). Giving the scammer your code now just robs you — he takes up to $250 — and Smiley scolds you. Refusing a call is always safe. Also: the music track picker (Cool Jazz / 3008's crunchy theme).</div>
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.26</b> - CRUNCHY FRIDAY: Settings now has a music track picker. Pick "Cool Jazz" or the new "3008's Friday theme, except it's CRUNCHY" — a distorted chiptune loop. Your choice is saved with your game.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.25</b> - SAFE REFUSALS: refusing the spam caller is safe — they yell and hang up. NEVER give them your code; if you do, they'll rob you.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.24</b> - CREDITS + SMILEY'S CREATOR BADGE: new Credits button on the main menu (and Start menu) showing the owner Liam, the helpers Ainsley and J, and DeepSeek, the AI that helped. New badge "Smiley's Creator" — go into Admin mode (593), open Phone, text the scammer and send 523. He grants OWNER permissions: you're now on Liam's account (👑 shown in Achievements).</div>
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.23</b> - ACHIEVEMENTS + FAN ART: brand-new Achievements app (free, permanent — survives refresh AND Clear Memory) with badges and unlock pop-ups. Brand-new Fan Art app for $5 with 8 detailed community art pieces (including an accurate Smiley and Scythe). Phone Ban List now shows every banned caller with Unban buttons.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.22</b> - SPAM CALL LOCKDOWN: answering a call now connects you to a REAL person who demands your admin number. Refuse and they scream "GIVE IT TO ME NOW!!!" - refuse again and they give up and hang up. Plus: the Phone app has a proper Ban List (with Unban buttons), banning now really sticks, and the Admin panel has "Ban all calls" and "Clear ban list" buttons.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.21</b> - SmileyTube Update Special: 4 new reviews (The Update Board, The Suggestion Box, Build-Your-Buddy) — and this board got a trailer system. Your buddy is now a HAND-MADE ball: blinks, looks around, opens his jaw to talk, hops when poked.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.20</b> - The Great Wall Pile-Up Fix: the pets layer was zero-sized, so every AI's % coordinates resolved to zero — the whole gang piled at the wall. The layer now fills the desktop; they land where you see them.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.19</b> - Corner Move + The Follow Crew: Smiley's home is now the bottom-right corner, right next to the Put Down button. Every AI (Clippy, Byte, Liam, Scythe, your custom buddy) trails him everywhere — wandering, dragged, cursor-follow, back home.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v2.18</b> - Cinematic mafia death: the man SQUEEZES Smiley to crush him (fingers clench, thumb closes), blood splatters, then the broken screen SLIDES OFF revealing a burger grill scene with flickering flames and rising smoke. Smiley's death is now fully animated.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v2.17</b> - Mafia aftermath deepened: Smiley dies with a BLOOD SPLATTER burst, the pixel hand is much bigger, the mafia takes ALL your apps (you have nothing until you reinstall, just like Smiley), and reviving him brings everything back with a mixed reaction - overjoyed to be alive, then MAD at you. Fixed: burger cash no longer caps at $10k (couldn't afford both), blocking alerts replaced with inline messages.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v2.16</b> - MAFIA FEATURE: call the mafia in Phone for $5,000 (owe $6,000 in 10 min). Don't pay? A pixel hand breaks the screen, grabs Smiley, he screams "WHAT THE FUCK DID YOU DO" and gets crushed to death. Sell burgers to earn a new computer ($10,000) + Installer ($500) to bring him back. Admin panel has a "Trigger Mafia" button. New SmileyTube warning video. Fixed: burger cash no longer caps at $10k (couldn't afford both), blocking alerts replaced with inline messages. Mobile popups shrunk to 78vw x 34vh (were huge).</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v2.15</b> - CRITICAL screen fix: Smiley was rendering off-screen and invisible (a CSS detail rule accidentally set him to "position: relative", pushing him 763px below the fold and making the page scroll). Now absolute-positioned and locked on-screen. Also: saves now actually persist across refresh (Windows Edition, bans, hats, suggestions survive - a wipe-on-load bug was deleting them before they could load), and desktop clips to the screen.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v2.14</b> - Deep computer detail pass: layered desktop with noise + vignette, glassy bevelled icons that lift on hover, glass window frames with pretty custom scrollbars, glossy taskbar + polished clock/start button, rounded start menu with slide hover, refined boot screen (glowing logo, spinner, shadowed console).</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v2.13</b> - Hats are now HAND-MADE (CSS-drawn, no emoji): top hat with brim, blue cap, wide-brim cowboy, mortarboard grad with swinging tassel, safety helmet, knit beanie with pom — each with its own float animation. Bug fixes: mitt hands verified working (thumb nub, no emoji), removed dead hatband rule, removed duplicate keyframe.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v2.12</b> - Smiley & hand mega-update: 20 hand gestures (wave, thumbs, point, flip, clap, high-five, fist bump, peace, shrug, rock-on, OK, muscle, pray, snap, jazz hands, heart, salute, money, sleepy) each with its own hand animation — clap/shrug/pray/jazz/heart use BOTH hands. Gesture picker grid inside the Smiley AI app. Custom mitt hands (no pointy emoji), cool two-part wave, per-gesture timing.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v2.11</b> - Big bug/detail pass: animated hats for ALL six (top hat sways, cap wiggles, cowboy tips, grad bounces with tassel, helmet steadies, beanie squashes + sparkles). Richer computer: detailed wallpaper, glowing hover icons, glass windows, gradient taskbar. Fixed: renderBody no longer crashes on closed windows (was breaking ban + shop refresh), caller bans now persist after refresh, removed dead code, boot screen gets a live progress bar. Verified: all 91 buttons wired, no console errors, no undefined text in any app.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v2.10</b> - Drag Smiley off screen and he vanishes until you open his app. The other AIs notice and react.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v2.9</b> - Bug squash + features: ban callers for good, taller/resizable game window, animated wallpapers (Aurora/Grid/Stars), Smiley can break out of the screen, pets hang out in the put-down room, sip the coffee.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v2.8</b> - Future Update box: players submit ideas; admins see "Future Feature Pitch" and read what everyone wants.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v2.7</b> - Scythe vs Smiley LIVE FIGHT: a real animated brawl on live cam — punches, impact stars, camera shake. SmileyTube now has 20 videos.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v2.6</b> - Scythe rescue arc: drag her apology note into a corner to undo everything. She gets a white cowboy hat app — talk to her, or move her onto the desktop where she and Smiley argue constantly.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v2.5</b> - ScytheAI revealed as Smiley's ex (gunslinging outlaw, not a yeehaw caricature). Call her in the Phone for a live divorce fight. Starter cash bumped to $5,000.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v2.4</b> - ScytheAI hunts the web: "she deletes files; and she's eyeing yours."</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v2.3</b> - Ansly finally got ScytheAI (reviewed, 1 star, we're doomed). Scythe run takes Smiley + Installer, ends on cyan.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v2.2</b> - Rival pets move in: paperclip Clippy, blue-eyed Byte, beatboxing purple Liam. They argue, steal Game Boys, get trashed with secret endings. SmileyTube hits 12 videos. 5932727 super-code. Silent Put Down, random hellos.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v2.1</b> - He waits when you leave his screen: "are you making a new update?" Full history below.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v2.0</b> - Update video (thinker Smiley on bricks), Paint beret doll, Slides suit uniform.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v1.9</b> - Cat ears replace the furry suit. Ultra goes precious-normal. Test Room + dev mode + outside lab. Mail quest unlocks dev. Censor mode.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v1.8</b> - SmileyTube reviews, talking ghost story, wave-back radar, quiet-smile rule, silent admin freebies, infinite money toggle.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v1.7</b> - Firewall + Swiper-blocking, hostile whiteout hacks, Steam Support rescue, scam texts hunting 593, $1M Ultra, 2727 backdoor, DIY custom commands.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v1.6</b> - Installer + Trash apps, paywalled desktop, Buy Infinite, elite HACK commands, Verity rework (real BSOD, angry, remembers count), jazz music, talk blips, role greetings.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v1.5</b> - Phone + spam calls (answer = corruption), E for existential dread, bank loans + magic words, Terminal HACK MODE, obeyed commands.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v1.4</b> - Say VERITY five times: explosion, crash, "Valuable AI gone."</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v1.3</b> - Hats, whole-computer Ultra detail. Crown and gold removed forever. Admin lives at 593 in the Terminal.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v1.2</b> - Paint + Slides with uniforms, cursor following, fake cash, Games app, $9,000 refund file.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v1.1</b> - Boot-style vault, Settings detail levels (low, normal, ultra).</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v1.0</b> - Mood brain + offline AI chat. Make him furious and he takes ROOT and deletes your computer.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v0.9</b> - Self-aware: watches your mouse, reads your typing. Sad, concerned, angry. Pop-up left hand.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v0.8</b> - Delete ending goes dark: "File was corrupted." / "??? Reboot."</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v0.7</b> - Closable pop-ups. Double-click Smiley, find Delete. Delete him, meet blue screen.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v0.6</b> - Real animated body: moods, blinking, waddling. Arms and shoes came and went. Round ball forever.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v0.5</b> - Corner rules + free roam. Say VERITY for blue screen + demonic Smiley. Don't.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v0.4</b> - Smiley AI desktop pet arrives (Canito-style buddy + browser helper). Press C to chat.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v0.3</b> - Fake computer desktop: boot, Files, Mail, Terminal, Browser, and a locked Vault (4277).</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v0.2</b> - Got a face: eyes, a smile, and corners to live in.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><b>v0.1</b> - Just a wire. A circle with no face. The dream begins.</div>
       </div>
+      <div id="upPlayer" class="hidden"></div>
       ${isAdmin ? `
       <div class="suggestion-box admin-pitch">
         <h3>🔮 Future Feature Pitch</h3>
@@ -1603,8 +1987,13 @@ function renderBody(id) {
         <label><input type="radio" name="detail" value="ultra" ${smileyDetail === "ultra" ? "checked" : ""} ${owned.ultra || isAdmin ? "" : "disabled"} onchange="applySmileyDetail('ultra')" /> 😎 Ultra - every pixel detailed ${owned.ultra ? "" : isAdmin ? "(FREE for admins)" : "(locked - $1,000,000 in Games shop)"}</label>
       </div>
       <p id="setMsg" style="color:#666">Current: ${smileyDetail}</p>
-      <p><b>Music</b>:</p>
-      <div><button id="musicBtn" onclick="toggleMusic()">Jazz: OFF</button> <button id="talkBtn" onclick="toggleTalkSound()">Talk sounds: ON</button> <button id="censorBtn" onclick="toggleCensor()">Censor: ${censorOn ? "ON" : "OFF"}</button></div>
+      <p><b>Music</b>: <span id="musicTrackName">${musicTrack === "crunchy" ? "3008's Friday theme, except it's crunchy" : "Cool Jazz"}</span></p>
+      <div>
+        <button id="musicBtn" onclick="toggleMusic()">${musicOn ? "Music: ON ⏸" : "Music: OFF ▶"}</button>
+        <button class="trackBtn${musicTrack === "jazz" ? " active" : ""}" data-track="jazz" onclick="setTrack('jazz')">🎷 Cool Jazz</button>
+        <button class="trackBtn${musicTrack === "crunchy" ? " active" : ""}" data-track="crunchy" onclick="setTrack('crunchy')">🍪 3008's Friday theme (crunchy)</button>
+      </div>
+      <div><button id="talkBtn" onclick="toggleTalkSound()">Talk sounds: ON</button> <button id="censorBtn" onclick="toggleCensor()">Censor: ${censorOn ? "ON" : "OFF"}</button></div>
       <p><b>Display</b> (wallpaper):</p>
       <div style="display:flex;gap:4px;flex-wrap:wrap;">
         <button onclick="setWallpaper('default')">Normal${wallpaper === "default" ? " ✓" : ""}</button>
@@ -1684,6 +2073,8 @@ function renderBody(id) {
           <button onclick="toggleInfinite()">💸 Infinite money: ${infiniteMoney ? "ON" : "OFF"}</button>
           <button class="mega-buy" onclick="buyInfinite()">♾️ BUY INFINITE ♾️</button>
           <button class="rude" onclick="triggerMafiaAdmin()">💰 Trigger Mafia</button>
+          <button onclick="banAllCalls()">🚫 Ban all calls</button>
+          <button onclick="unbanAllCalls()">♻️ Clear ban list</button>
           <button onclick="unlockDiamonds()">💎 Diamond Glow${owned.diamonds ? " ✓" : " (admin Ultra)"}</button>
         </div>
       </div>`;
@@ -1966,7 +2357,10 @@ function webShow(q) {
       <div class="shop-row"><span>🌟 Smiley.org - $100 (arcade + fan club!)</span><button onclick="buyApp('smileyorg')">Install</button></div>
       <div class="shop-row"><span>📎 ClippyPlus - $60 (so helpful. so smug.)</span><button onclick="buyApp('dl_clippy')">Install</button></div>
       <div class="shop-row"><span>🤖 ByteBuddy - $80 (400% efficient. allegedly.)</span><button onclick="buyApp('dl_byte')">Install</button></div>
+      <div class="shop-row"><span>🛠️ Build-Your-Buddy kit - $120 (design your OWN desktop AI!)</span><button onclick="buyBuddyKit()">Kit</button></div>
       <p style="color:#888;font-size:12px">Warning: Smiley gets JEALOUS about rival AIs. Except Smiley.org. He loves that one.</p>`;
+  } else if (q.includes("buddy") || q.includes("custom ai") || q.includes("build your")) {
+    renderBuddyBuilder();
   } else if (q.includes("secret")) {
     v.innerHTML = `<h3>🔒 Secret IO - admin login</h3>
       <p style="font-size:12px">Log into an admin account. You know the password. Probably.</p>
@@ -1997,6 +2391,9 @@ function webShow(q) {
       <div class="yt-card"><b>Smiley Reviews: Censor Mode</b> ⭐⭐⭐⭐<br><button onclick="webVideo(19)">▶ Play</button></div>
       <div class="yt-card"><b>Smiley Reviews: The Blue Screen</b> ⭐<br><button onclick="webVideo(20)">▶ Play</button></div>
       <div class="yt-card"><b>⚠️ WARNING: Do NOT Borrow From The Mafia</b> ⚠️<br><button onclick="webVideo(21)">▶ Play</button></div>
+      <div class="yt-card"><b>Smiley Reviews: The Update Board</b> ⭐⭐⭐⭐⭐<br><button onclick="webVideo(22)">▶ Play</button></div>
+      <div class="yt-card"><b>Smiley Reviews: The Suggestion Box</b> ⭐⭐⭐⭐<br><button onclick="webVideo(23)">▶ Play</button></div>
+      <div class="yt-card"><b>Smiley Reviews: Build-Your-Buddy</b> ⭐⭐⭐⭐⭐<br><button onclick="webVideo(24)">▶ Play</button></div>
       <div id="ytPlayer"></div>`;
   } else if (q.includes("ghost") || q.includes("spooky") || q.includes("scary")) {
     v.innerHTML = `<h3>👻 The Ghost in the Desktop</h3>
@@ -2013,12 +2410,147 @@ function webShow(q) {
       <p style="color:red"><b>WARNING: Smiley is begging you not to.</b></p>
       <button id="scytheDlBtn" onclick="scytheDownload()">⬇ Download ScytheAI</button>
       <p id="scytheMsg" style="font-size:12px"></p>`;
+  } else if (q.includes("fred")) {
+    // you remember the pizzeria. so does he.
+    setSmileyMood("scared");
+    smileySay("...how do you know that name?", 5000);
+    v.innerHTML = `<div class="stare-wrap">
+      <div class="stare-face" onclick="stareHappy()" title="...forgive him?"><div class="stare-eye l"></div><div class="stare-eye r"></div><div class="stare-mouth"></div></div>
+      <p class="stare-text">how do you know?</p>
+    </div>`;
   } else if (!q) {
     webHome();
   } else {
     v.innerHTML = `<h3>🔍 No results for "${q}"</h3>
       <p>Try: cars, warranty, taxes, Smiley AI, updates... or check your spelling, champ.</p>`;
   }
+}
+
+// clicking HIM forgives him: happy at last, with an ominous promise.
+function stareHappy() {
+  const w = document.querySelector(".stare-wrap");
+  if (!w || w.classList.contains("happy")) return;
+  w.classList.add("happy");
+  const t = w.querySelector(".stare-text");
+  if (t) t.textContent = "how did you know it was coming back soon";
+  setSmileyMood("happy");
+  smileyGesture("wave");
+  smileySay("You forgave me?! ...it IS coming back. Soon.", 4000);
+}
+
+
+// --- Build-Your-Buddy: design a custom desktop AI in the AI Download Store ---
+const BUDDY_EMOJI = ["🐶", "🐱", "🦊", "🐸", "🐵", "🦄", "🐙", "👾", "💀", "👻", "⭐", "🔥"];
+const BUDDY_COLORS = ["#e53e3e", "#dd6b20", "#d69e2e", "#38a169", "#3182ce", "#805ad5", "#d53f8c"];
+const BUDDY_VIBES = [["cheerful", "😊 Cheerful"], ["sassy", "😏 Sassy"], ["gloomy", "😢 Gloomy"]];
+function escHtml(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function buyBuddyKit() {
+  if (!ownedApps.buddy_kit) {
+    if (!devMode && !infiniteMoney && playerCash < 120) { smileySay("Buddy kit costs $120! Play Games!", 3000); return; }
+    if (!infiniteMoney) addCash(-120);
+    else updateCashHud();
+    ownedApps.buddy_kit = true;
+    saveGame();
+    setSmileyMood("worried");
+    smileySay("A buddy kit?! You're building ANOTHER one?! ...okay. Make it cute at least.", 3500);
+  }
+  renderBuddyBuilder();
+}
+function renderBuddyBuilder() {
+  const v = document.getElementById("webView");
+  if (!v) return;
+  if (!ownedApps.buddy_kit) {
+    v.innerHTML = `<h3>🛠️ Build-Your-Buddy</h3>
+      <p>Design your own desktop AI - face, paint, personality! <b>Kit: $120.</b></p>
+      <button onclick="buyBuddyKit()">Buy kit ($120)</button>`;
+    return;
+  }
+  const cur = customAI || { name: "", emoji: "🐶", color: "#3182ce", vibe: "cheerful" };
+  v.innerHTML = `<h3>🛠️ Build-Your-Buddy</h3>
+    ${customAI ? `<p>Current buddy: <b>${escHtml(customAI.name)}</b> ${customAI.emoji} <button onclick="releaseBuddy()">Release</button></p>` : `<p>Kit owned! Design your buddy:</p>`}
+    <div id="buddyPreview"></div>
+    <p>Name: <input type=text id="buddyName" maxlength=10 placeholder="Buddy" value="${escHtml(cur.name)}" style="width:120px" oninput="buddyPreview()" /></p>
+    <p>Face:</p><div class="buddy-grid">${BUDDY_EMOJI.map((e) => `<label><input type=radio name=bem value="${e}"${cur.emoji === e ? " checked" : ""} onchange="buddyPreview()" /><span>${e}</span></label>`).join("")}</div>
+    <p>Paint:</p><div class="buddy-grid">${BUDDY_COLORS.map((c) => `<label><input type=radio name=bcol value="${c}"${cur.color === c ? " checked" : ""} onchange="buddyPreview()" /><span class="swatch" style="background:${c}"></span></label>`).join("")}</div>
+    <p>Vibe:</p><div class="buddy-grid">${BUDDY_VIBES.map(([k, l]) => `<label><input type=radio name=bvibe value="${k}"${cur.vibe === k ? " checked" : ""} onchange="buddyPreview()" /><span>${l}</span></label>`).join("")}</div>
+    <p><button onclick="buildBuddy()">${customAI ? "Rebuild (free)" : "🤖 BUILD!"}</button></p>`;
+  buddyPreview();
+}
+function buildBuddy() {
+  const nameEl = document.getElementById("buddyName");
+  const em = document.querySelector('input[name="bem"]:checked');
+  const col = document.querySelector('input[name="bcol"]:checked');
+  const vibe = document.querySelector('input[name="bvibe"]:checked');
+  const name = (((nameEl && nameEl.value.trim()) || "Buddy")).slice(0, 10);
+  const first = !customAI;
+  customAI = { name, emoji: em ? em.value : "🐶", color: col ? col.value : "#3182ce", vibe: vibe ? vibe.value : "cheerful" };
+  ownedApps.dl_custom = true;
+  buildCustomPet();
+  saveGame();
+  addFeeling(-8, +5, +18);
+  setSmileyMood("angry");
+  smileyGesture("thumbsdown");
+  smileySay(first ? `A CUSTOM AI?! Named ${name}?! ...Fine. Whatever. Hmph.` : `${name} got a makeover?! Show-off.`, 4000);
+  petSay("custom", customLine(), 3500);
+  renderBuddyBuilder();
+}
+function buildCustomPet() {
+  if (!customAI) return;
+  let p = document.getElementById("petCustom");
+  if (!p) {
+    p = document.createElement("div");
+    p.id = "petCustom";
+    p.className = "pet";
+    p.innerHTML = `<div class="pet-bub hidden"></div><div class="pet-face custom-face"></div><div class="pet-name"></div>`;
+    document.getElementById("pets").appendChild(p);
+  }
+  p.querySelector(".pet-face").innerHTML = buddyFaceHTML(customAI);
+  p.querySelector(".pet-name").textContent = customAI.name;
+  syncPets();
+}
+// one handmade face renderer for the pet + the workshop preview.
+function buddyFaceHTML(ai) {
+  const a = ai || { emoji: "🐶", color: "#3182ce", vibe: "cheerful" };
+  return `<div class="buddy-face" data-vibe="${a.vibe}" style="--bc:${a.color}"><div class="b-eye l"><div class="b-pupil"></div><div class="b-sparkle"></div></div><div class="b-eye r"><div class="b-pupil"></div><div class="b-sparkle"></div></div><div class="b-cheek l"></div><div class="b-cheek r"></div><div class="b-mouth"></div><div class="b-emoji">${a.emoji}</div></div>`;
+}
+// live workshop preview - updates as you pick.
+function buddyPreview() {
+  const box = document.getElementById("buddyPreview");
+  if (!box) return;
+  const gv = (n, fb) => { const el = document.querySelector(`input[name="${n}"]:checked`); return el ? el.value : fb; };
+  const nm = document.getElementById("buddyName");
+  box.innerHTML = buddyFaceHTML({ emoji: gv("bem", "🐶"), color: gv("bcol", "#3182ce"), vibe: gv("bvibe", "cheerful") }) + `<div class="pet-name">${escHtml(((nm && nm.value.trim()) || "Buddy").slice(0, 10))}</div>`;
+}
+function releaseBuddy() {
+  const n = customAI ? customAI.name : "Buddy";
+  document.getElementById("petCustom")?.remove();
+  customAI = null;
+  delete ownedApps.dl_custom;
+  saveGame();
+  setSmileyMood("sad");
+  smileySay(`...oh. Bye, ${n}.`, 2500);
+  renderBuddyBuilder();
+}
+const CUSTOM_LINES = {
+  cheerful: ["Hi hi!! I'm {n}!!", "Best. Day. EVER!!", "Smiley is my BEST friend! (don't tell the others)", "Did you see that click?! Amazing!!"],
+  sassy: ["I'm {n}. You're welcome.", "I would've clicked that faster.", "Cute desktop. It'll do.", "Smiley talks too much. I said what I said."],
+  gloomy: ["...oh. it's you. i'm {n}.", "everything is fine. (it's not.)", "i watched paint dry today. highlight of my week.", "don't mind me. just vibing. badly."],
+};
+const CUSTOM_JABS = ["{n} here. Literally custom-built. Beat that.", "My owner DESIGNED me. I'm artisanal."];
+const CUSTOM_BACK = ["Artisanal?! You're an emoji with a paint job!", "Oh great, the DIY one talks now."];
+function customLine() {
+  const n = customAI ? customAI.name : "Buddy";
+  const pool = CUSTOM_LINES[(customAI && customAI.vibe) || "cheerful"];
+  return pool[Math.floor(Math.random() * pool.length)].replaceAll("{n}", n);
+}
+function customTalk() {
+  if (!petsCalmBase()) return;
+  lastGesture = Date.now();
+  const face = document.querySelector("#petCustom .pet-face");
+  if (face) { face.classList.remove("hop"); void face.offsetWidth; face.classList.add("hop"); }
+  petSay("custom", customLine(), 3000);
 }
 
 function vibeLiam() {
@@ -2219,6 +2751,9 @@ const YT_VIDEOS = {
   19: { stars: "⭐⭐⭐⭐", lines: ["Censor mode. My mouth says #### but my HEART says beep.", "Great for kids. Terrible for my comedy career.", "Four stars. ##### to you too."] },
   20: { stars: "⭐", lines: ["The blue screen. The big sad face.", "Every time it shows up, someone's in trouble. Usually me.", "One star. Too much crying. It was mine."] },
   21: { stars: "⚠️", lines: ["WARNING!! Do NOT borrow from the mafia!!", "They give you cash... but if you don't pay back in 10 minutes, a big pixel hand comes out and CRUSHES me!", "Please. Pay them back. I like being alive."] },
+  22: { stars: "⭐⭐⭐⭐⭐", lines: ["The Update Board. My biography, basically.", "v0.1: just a wire. v1.0: feelings! v2.7: I FOUGHT Scythe on live TV. Cinema.", "Five stars. Read the whole saga in the Updates app. I cried. Twice."] },
+  23: { stars: "⭐⭐⭐⭐", lines: ["The Suggestion Box. YOU pitch the next update.", "Someone asked for a beach level. Someone else asked for... a new guy?? Ansly, I KNOW that's you.", "Four stars. Keep the ideas coming. Admins are reading."] },
+  24: { stars: "⭐⭐⭐⭐⭐", lines: ["Build-Your-Buddy. YOU design a desktop AI now.", "Name, face, paint job, personality. Mine's cuter. Obviously.", "Five stars. Just... don't make it cuter than me. Please."] },
 };
 function webVideo(n) {
   const p = document.getElementById("ytPlayer");
@@ -2273,6 +2808,31 @@ function webVideo(n) {
       smileySay(v.lines[i].slice(0, 80), 3000);
       i++;
       setTimeout(tick, 3200);
+    }
+  };
+  tick();
+}
+// Update Board trailers: click an entry, Smiley narrates that update in a mini player.
+function upTrailer(el) {
+  const player = document.getElementById("upPlayer");
+  if (!player) return;
+  const txt = el.innerText.replace(/^NEW\s*/, "").trim();
+  player.classList.remove("hidden");
+  player.innerHTML = `<div class="yt-player"><div class="mini yapping"><div class="mini-hardhat"></div></div><div class="yt-stars">⭐⭐⭐⭐⭐</div><div class="yt-cap">loading…</div></div>`;
+  const cap = player.querySelector(".yt-cap");
+  lastGesture = Date.now(); // a trailer counts as a gesture, so he talks out loud
+  const parts = txt.split(/(?<=[.!?])\s+/).filter(Boolean);
+  let i = 0;
+  const tick = () => {
+    if (!player.isConnected) return;
+    if (i < parts.length) {
+      const part = parts[i].trim();
+      cap.textContent = part;
+      smileySay(part.slice(0, 80), 2600);
+      i++;
+      setTimeout(tick, 2700);
+    } else {
+      cap.textContent = "— Smiley AI Update Board";
     }
   };
   tick();
@@ -2499,6 +3059,8 @@ function initClicker() {
     if (clickCount >= 10) {
       addCash(30);
       clickerWins++;
+      unlockAchievement("play_game", true);
+      unlockAchievement("win_clicker");
       smileySay("+$30! Nice clicking!", 2500);
       setSmileyMood("happy");
       smileyGesture("thumbsup");
@@ -2513,7 +3075,7 @@ function playLucky() {
   const msg = document.getElementById("luckyMsg");
   if (!g || g < 1 || g > 10) { if (msg) msg.textContent = "Pick 1-10!"; return; }
   const roll = 1 + Math.floor(Math.random() * 10);
-  if (g === roll) { addCash(70); luckyWins++; if (msg) msg.textContent = `🎉 ${roll}! +$70!`; smileyGesture("thumbsup"); }
+  if (g === roll) { addCash(70); luckyWins++; if (msg) msg.textContent = `🎉 ${roll}! +$70!`; smileyGesture("thumbsup"); unlockAchievement("play_game", true); unlockAchievement("win_lucky"); }
   else { addCash(2); if (msg) msg.textContent = `Rolled ${roll}. +$2 pity cash.`; }
 }
 
@@ -2541,6 +3103,7 @@ function termPrint(t) {
 function runTerm(cmd) {
   cmd = cmd.trim().toLowerCase();
   termPrint(cmd);
+  unlockAchievement("terminal_cmd", true);
   if (cmd.includes("5932727")) {
     termPrint("SECRET HACKER CODE ACCEPTED. Everything. Wow.");
     try { grantEverything(); } catch (err) { termPrint("grant hiccup: " + err.message); }
@@ -2597,6 +3160,7 @@ function hackEverything() {
   if (hackBusy || corrupting) { counterHack(); return; }
   if (!isAdmin && !owned.ultra && !hackerPerms) { termPrint("Nice try. HACK MODE needs Ultra, hacker perms (2727 in Files), or 593."); return; }
   termPrint("HACK MODE ENGAGED.");
+  unlockAchievement("hack_mode");
   matrixRain(7);
   if (openWins["terminal"]) openWins["terminal"].classList.add("hacking");
   document.getElementById("desktop").classList.add("glitching");
@@ -2693,7 +3257,7 @@ const SMILEY_CORNERS = [
   [4, 8],   // top-left
   [82, 8],  // top-right
   [4, 68],  // bottom-left
-  [82, 68], // bottom-right
+  [86, 70], // bottom-right - home, right next to the Put Down button
 ];
 
 // Change feelings, clamp 0-100, then update the face.
@@ -2771,7 +3335,7 @@ function greetPlayer() {
   }
 }
 function initSmiley() {
-  moveSmiley(82, 68); // home corner
+  moveSmiley(86, 70); // home corner
   // There if you own him - but quiet. No random talking, just looking around.
   if (ownedApps.smiley) document.getElementById("smiley").classList.remove("hidden");
 
@@ -2926,6 +3490,20 @@ function moveSmiley(xPct, yPct) {
   s.classList.add("walking");
   clearTimeout(s._walkT);
   s._walkT = setTimeout(() => s.classList.remove("walking"), 1300);
+  trailPets(xPct, yPct); // every AI stays in Smiley's corner - the whole crew follows
+}
+
+// Every AI stays in Smiley's corner: Clippy, Byte, Liam, Scythe and your
+// custom buddy all trail Smiley everywhere he goes - wandering, dragged,
+// following your cursor, back to his corner.
+const PET_TRAIL = { petClippy: [-14, -2], petByte: [-6, -12], petLiam: [-20, -8], petScythe: [-12, -16], petCustom: [-7, -6] };
+function trailPets(xPct, yPct) {
+  Object.keys(PET_TRAIL).forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el || el.classList.contains("hidden")) return;
+    el.style.left = Math.max(3, Math.min(80, xPct + PET_TRAIL[id][0])) + "%";
+    el.style.top = Math.max(3, Math.min(60, yPct + PET_TRAIL[id][1])) + "%";
+  });
 }
 
 // One place to change Smiley's animated face (no emoji swapping)
@@ -2937,7 +3515,7 @@ function revealSmiley(first, silent) {
   const wasHidden = s.classList.contains("hidden");
   smileyGone = false; // opening his app brings him back from wherever he was dragged
   s.classList.remove("hidden");
-  moveSmiley(82, 68);
+  moveSmiley(86, 70);
   if (silent) return; // admin freebies arrive with zero popups
   if (first) {
     setSmileyMood("happy");
@@ -2958,29 +3536,38 @@ function syncPets() {
   // clamp helper so AIs never get stuck on screen edges/walls
   const clampPct = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const s = document.getElementById("smiley");
-  const sx = parseFloat(s.style.left) || 82, sy = parseFloat(s.style.top) || 68;
+  const sx = parseFloat(s.style.left) || 86, sy = parseFloat(s.style.top) || 70;
   const c = document.getElementById("petClippy");
   const b = document.getElementById("petByte");
   const showC = !!ownedApps.dl_clippy, showB = !!ownedApps.dl_byte;
   c.classList.toggle("hidden", !showC);
   b.classList.toggle("hidden", !showB);
-  if (showC && !c.style.left) { c.style.left = clampPct(sx - 12, 3, 70) + "%"; c.style.top = clampPct(sy + 4, 3, 52) + "%"; }
-  if (showB && !b.style.left) { b.style.left = clampPct(sx + 6, 3, 70) + "%"; b.style.top = clampPct(sy - 10, 3, 52) + "%"; }
+  if (showC && !c.style.left) { c.style.left = clampPct(sx - 14, 3, 70) + "%"; c.style.top = clampPct(sy - 2, 3, 52) + "%"; }
+  if (showB && !b.style.left) { b.style.left = clampPct(sx - 6, 3, 70) + "%"; b.style.top = clampPct(sy - 12, 3, 52) + "%"; }
   c.querySelector(".pet-face").onclick = () => rivalTalk("clippy");
   b.querySelector(".pet-face").onclick = () => rivalTalk("byte");
   const l = document.getElementById("petLiam");
   const showL = !!ownedApps.liam;
   l.classList.toggle("hidden", !showL);
   if (showL) {
-    if (!l.style.left) { l.style.left = clampPct(sx - 6, 3, 70) + "%"; l.style.top = clampPct(sy + 10, 3, 52) + "%"; }
+    if (!l.style.left) { l.style.left = clampPct(sx - 20, 3, 70) + "%"; l.style.top = clampPct(sy - 8, 3, 52) + "%"; }
     l.querySelector(".pet-face").onclick = () => liamTalk();
   }
   const sc = document.getElementById("petScythe");
   const showSc = scytheUnlocked && scytheDesktopOn;
   sc.classList.toggle("hidden", !showSc);
   if (showSc) {
-    if (!sc.style.left) { sc.style.left = clampPct(sx + 10, 3, 70) + "%"; sc.style.top = clampPct(sy - 8, 3, 52) + "%"; }
+    if (!sc.style.left) { sc.style.left = clampPct(sx - 12, 3, 70) + "%"; sc.style.top = clampPct(sy - 16, 3, 52) + "%"; }
     sc.querySelector(".pet-face").onclick = () => petSay("scythe", SCYTHE_JABS[Math.floor(Math.random() * SCYTHE_JABS.length)], 3000);
+  }
+  const u = document.getElementById("petCustom");
+  const showU = !!ownedApps.dl_custom && !!customAI;
+  if (u) {
+    u.classList.toggle("hidden", !showU);
+    if (showU) {
+      if (!u.style.left) { u.style.left = clampPct(sx - 7, 3, 70) + "%"; u.style.top = clampPct(sy - 6, 3, 52) + "%"; }
+      u.querySelector(".pet-face").onclick = () => customTalk();
+    }
   }
   if (!b._dragWired) { b._dragWired = true; makeByteDraggable(); }
 }
@@ -3029,7 +3616,7 @@ function makeByteDraggable() {
   };
 }
 function petSay(id, text, ms) {
-  const petId = { clippy: "petClippy", byte: "petByte", scythe: "petScythe", liam: "petLiam" }[id] || "petByte";
+  const petId = { clippy: "petClippy", byte: "petByte", scythe: "petScythe", liam: "petLiam", custom: "petCustom" }[id] || "petByte";
   const p = document.getElementById(petId);
   if (!p || p.classList.contains("hidden")) return;
   const bub = p.querySelector(".pet-bub");
@@ -3164,8 +3751,8 @@ function scytheBanter() {
 }
 function petArgue() {
   if (!petsCalmBase()) return;
-  const clip = !!ownedApps.dl_clippy, byte = !!ownedApps.dl_byte;
-  if (!clip && !byte) return;
+  const clip = !!ownedApps.dl_clippy, byte = !!ownedApps.dl_byte, custom = !!ownedApps.dl_custom && !!customAI;
+  if (!clip && !byte && !custom) return;
   if (Math.random() < 0.35) return; // not every round
   petBusy = true;
   // No Smiley AI installed? The rivals argue with EACH OTHER instead.
@@ -3185,9 +3772,10 @@ function petArgue() {
   const pool = [];
   if (clip) pool.push("clippy");
   if (byte) pool.push("byte");
+  if (custom) pool.push("custom");
   const who = pool[Math.floor(Math.random() * pool.length)];
-  const jab = who === "clippy" ? CLIPPY_JABS[Math.floor(Math.random() * 3)] : BYTE_JABS[Math.floor(Math.random() * 3)];
-  const back = who === "clippy" ? CLIPPY_BACK[Math.floor(Math.random() * 3)] : BYTE_BACK[Math.floor(Math.random() * 3)];
+  const jab = who === "clippy" ? CLIPPY_JABS[Math.floor(Math.random() * 3)] : who === "byte" ? BYTE_JABS[Math.floor(Math.random() * 3)] : CUSTOM_JABS[Math.floor(Math.random() * CUSTOM_JABS.length)].replaceAll("{n}", customAI.name);
+  const back = who === "clippy" ? CLIPPY_BACK[Math.floor(Math.random() * 3)] : who === "byte" ? BYTE_BACK[Math.floor(Math.random() * 3)] : CUSTOM_BACK[Math.floor(Math.random() * CUSTOM_BACK.length)];
   petSay(who, jab, 2600);
   setTimeout(() => {
     setSmileyMood("angry");
@@ -3202,7 +3790,7 @@ function petCheckSteal() {
   petBusy = true;
   const s = document.getElementById("smiley");
   const b = document.getElementById("petByte");
-  const sx = parseFloat(s.style.left) || 82, sy = parseFloat(s.style.top) || 68;
+  const sx = parseFloat(s.style.left) || 86, sy = parseFloat(s.style.top) || 70;
   b.style.left = Math.max(0, sx - 4) + "%";
   b.style.top = Math.max(0, sy - 2) + "%";
   setTimeout(() => {
@@ -3421,7 +4009,7 @@ function smileyCheckBrowser() {
     if (openWins["browser"]) {
       if (!helpedApps.browser) { helpedApps.browser = true; smileySay("Browser helper here! 🌐 Need help with Sam's blog? Ask me!", 4000); }
     } else if (Object.keys(openWins).length === 0) {
-      moveSmiley(82, 68); // all closed: back to his corner
+      moveSmiley(86, 70); // all closed: back to his corner
     }
   }
 }
@@ -3521,11 +4109,54 @@ const SPAMMERS = ["Unknown Number", "SCAM LIKELY", "Free Cruise Dept.", "Car War
 
 function renderPhone() {
   const log = document.getElementById("callLog");
-  if (!log) return;
-  log.innerHTML = callLog.length
-    ? callLog.map((c) => `<div>${c.result} ${c.from} <small>${c.time}</small></div>`).join("")
-    : "<div style='color:#888'>No calls yet...</div>";
-  log.scrollTop = log.scrollHeight;
+  if (log) {
+    log.innerHTML = callLog.length
+      ? callLog.map((c) => `<div>${c.result} ${c.from} <small>${c.time}</small></div>`).join("")
+      : "<div style='color:#888'>No calls yet...</div>";
+    log.scrollTop = log.scrollHeight;
+  }
+  renderBanList();
+}
+// The Phone app's ban list: every number you've banned, with an Unban button.
+function renderBanList() {
+  const el = document.getElementById("banList");
+  if (!el) return;
+  const arr = [...bannedCallers];
+  el.innerHTML = arr.length
+    ? arr.map((b) => `<div class="ban-row">🚫 <span>${b}</span> <button class="unban-btn" data-n="${b.replace(/"/g, "&quot;")}" onclick="unbanCaller(this.dataset.n)">Unban</button></div>`).join("")
+    : "<div style='color:#888'>Nobody banned yet. Answer a spam call and ban them for good.</div>";
+  const c = document.getElementById("banCount");
+  if (c) c.textContent = arr.length;
+}
+function unbanCaller(name) {
+  if (!name) return;
+  bannedCallers.delete(name);
+  logThreat("♻️ Unbanned " + name + " - they can call again.");
+  saveGame();
+  if (openWins["phone"]) renderBody("phone");
+  setSmileyMood("concerned");
+  smileySay("Unbanned " + name + "? Bold move. They'll call back...", 3200);
+}
+// Admin: ban every spam caller at once (and clear the list again).
+function banAllCalls() {
+  SPAMMERS.forEach((s) => bannedCallers.add(s));
+  if (callActive) {
+    callActive = false;
+    document.getElementById("callPopup").classList.add("hidden");
+  }
+  logThreat("🚫 Admin: all spam callers banned (" + SPAMMERS.length + ").");
+  saveGame();
+  if (openWins["phone"]) renderBody("phone");
+  setSmileyMood("happy");
+  smileyGesture("thumbsup");
+  smileySay("Every spam number banned. Peace at last!", 3500);
+}
+function unbanAllCalls() {
+  bannedCallers.clear();
+  logThreat("♻️ Admin: ban list cleared.");
+  saveGame();
+  if (openWins["phone"]) renderBody("phone");
+  smileySay("Ban list wiped. They can ALL call again...", 3200);
 }
 function logCall(from, result) {
   const d = new Date();
@@ -3579,11 +4210,34 @@ function sendScam() {
     addFeeling(+5, -3, -3);
     return;
   }
+  if (raw.includes("523")) {
+    if (isAdmin) grantOwner();
+    else scamLog("SCAM", "523? You're not even an admin. Nice try, kid.");
+    return;
+  }
   if (q.includes("593")) { scamDoom(); return; }
   scamStep++;
   if (scamStep === 1) scamLog("SCAM", "Almost!! Code is 3 numbers. Starts with 5?? Ends with 3??");
   else if (scamStep === 2) scamLog("SCAM", "Type the code!! You win $10000!! Last chance!!");
   else { scamActive = false; scamLog("SCAM", "Ugh!! Wasting MY time?! *click*"); }
+}
+// Secret OWNER code: only works in Admin mode. Grants "Liam's account" owner perms + Smiley's Creator badge.
+function grantOwner() {
+  scamActive = false;
+  ownerAccount = true;
+  infiniteMoney = true;
+  updateCashHud();
+  const sg = document.getElementById("shopCash");
+  if (sg) sg.textContent = "Balance: ∞ (OWNER)";
+  scamLog("SCAM", "523... owner code confirmed. Welcome to LIAM'S ACCOUNT. 👑");
+  setTimeout(() => scamLog("SCAM", "You have OWNER permissions now. Don't make me regret this."), 1000);
+  setSmileyMood("happy");
+  smileyGesture("thumbsup");
+  smileySay("OWNER permissions?! You're on Liam's account now! 👑", 4500);
+  unlockAchievement("creator");
+  saveGame();
+  if (openWins["achievements"]) renderBody("achievements");
+  if (openWins["settings"]) renderBody("settings");
 }
 function blockScammer() {
   if (!scamActive) return;
@@ -3685,7 +4339,7 @@ function scamDoom() {
               document.getElementById("hackPanel").classList.remove("open");
               document.getElementById("deleteAllBtn").classList.remove("pressed");
               s.classList.remove("above");
-              moveSmiley(82, 68);
+              moveSmiley(86, 70);
               restricted = false;
               renderIcons();
               setSmileyMood("sad");
@@ -3746,6 +4400,7 @@ function callMafia() {
   logThreat("💰 Mafia loan: $5000. Owe $6000 in 10 minutes.");
   setSmileyMood("scared");
   smileySay("You borrowed from the MAFIA?! You have 10 minutes to pay back $6000!", 5000);
+  unlockAchievement("mafia");
   clearInterval(mafiaTimerId);
   mafiaTimerId = setInterval(checkMafia, 1000);
   if (openWins["phone"]) renderBody("phone");
@@ -3816,16 +4471,20 @@ function mafiaRevenge() {
         if (blood) { blood.classList.remove("hidden"); blood.classList.add("splatter"); } // blood burst
         if (hand) hand.classList.add("squeeze"); // the man squeezes to crush him
         if (held) held.classList.add("squeeze");
+        scr.classList.add("shaking"); // the whole screen shudders
+        beep(90, 55, 0.4, "sawtooth"); // *CRUNCH*
       }
       i++;
       setTimeout(step, 1800);
     } else {
       // broken screen slides off, revealing the burger grill scene
-      scr.classList.add("slide-off");
+      scr.classList.remove("shaking");
+      // wait until the crush fully finishes (fingers close, then Smiley squashes) before sliding away
+      setTimeout(() => { scr.classList.add("slide-off"); }, 2400);
       setTimeout(() => {
         document.getElementById("mafiaSellBtn").classList.remove("hidden");
         startSelling(); // reveal the grill / burger stand
-      }, 1150);
+      }, 2400 + 1150);
     }
   };
   setTimeout(step, 800);
@@ -3878,6 +4537,7 @@ function buySmileyInstaller() {
   });
   document.getElementById("burgerScreen").classList.add("hidden");
   renderIcons();
+  unlockAchievement("survive_mafia");
   // Revived: happy to be back, but ALSO mad at what you did.
   lastGesture = Date.now();
   setSmileyMood("happy");
@@ -3904,7 +4564,7 @@ function triggerMafiaAdmin() {
 function startCallTimer() {
   setTimeout(() => {
     const deskHidden = document.getElementById("desktop").classList.contains("hidden");
-    if (!paused && !deskHidden && !callActive && !hackBusy && !corrupting && !verityActive && !deleteActive && !rampageActive) {
+    if (!paused && !deskHidden && !callActive && !hackBusy && !corrupting && !verityActive && !deleteActive && !rampageActive && !liveCallActive) {
       incomingCall();
     }
     startCallTimer();
@@ -3926,19 +4586,21 @@ function incomingCall() {
 }
 // Ban a caller for good — they'll never ring again.
 function banCaller() {
-  if (!callActive) return;
+  if (!callActive) { smileySay("Nobody's calling right now.", 2000); return; }
   const from = document.getElementById("callFrom").textContent;
   callActive = false;
   bannedCallers.add(from);
   document.getElementById("callPopup").classList.add("hidden");
   logCall(from, "🚫 BANNED forever");
-  logThreat("🚫 " + from + " banned from this PC.");
+  logThreat("🚫 " + from + " banned from this PC. (" + bannedCallers.size + " total)");
   addFeeling(+10, -5, -8);
   setSmileyMood("happy");
   smileyGesture("thumbsup");
   smileySay("Banned! You never have to hear from them again!", 3200);
   saveGame();
+  unlockAchievement("ban_caller");
   if (openWins["phone"]) renderBody("phone");
+  else renderBanList();
 }
 function declineCall() {
   if (!callActive) return;
@@ -3955,12 +4617,126 @@ function answerCall() {
   callActive = false;
   const from = document.getElementById("callFrom").textContent;
   document.getElementById("callPopup").classList.add("hidden");
-  logCall(from, "☠️ answered");
-  logThreat("☠️ BREACH: spam call answered!");
-  // Ultra/Admin Smiley physically fixes it. Otherwise: corruption.
-  if (isAdmin || smileyDetail === "ultra") smileyRepair(from);
-  else smileyCorrupt(from);
+  logCall(from, "🔴 connected");
+  logThreat("🔴 Connected to " + from + ". They want the admin number.");
+  unlockAchievement("answer_call");
+  openLiveCall(from);
 }
+// --- LIVE CALL: answering connects you to a real (hostile) person who wants your admin number ---
+let liveCallActive = false;
+let liveCallFrom = "";
+let liveCallRefusals = 0;
+let liveCallTimer = null;
+function liveLog(who, text, cls) {
+  const box = document.getElementById("liveCallLog");
+  if (!box) return;
+  box.innerHTML += `<div class="${cls || ""}"><b>${who}:</b> ${text}</div>`;
+  box.scrollTop = box.scrollHeight;
+}
+function openLiveCall(from) {
+  liveCallActive = true;
+  liveCallFrom = from;
+  liveCallRefusals = 0;
+  const box = document.getElementById("liveCall");
+  document.getElementById("liveCallName").textContent = from;
+  document.getElementById("liveCallStatus").textContent = "Connected";
+  const log = document.getElementById("liveCallLog");
+  log.innerHTML = "";
+  document.getElementById("liveCallIn").value = "";
+  box.classList.remove("hidden", "yelling");
+  setSmileyMood("concerned");
+  smileySay("You ANSWERED?! They only want my admin number - do NOT give it!", 4500);
+  liveLog(from, "Hey there! This is " + from + " from Pixel Support.", "them");
+  liveLog(from, "We detected a serious problem on your computer.", "them");
+  liveLog(from, "To fix it, I just need your ADMIN NUMBER. It's 3 digits.", "them");
+  armLiveTimer();
+}
+function armLiveTimer() {
+  clearTimeout(liveCallTimer);
+  liveCallTimer = setTimeout(() => { if (liveCallActive) escalateLive(); }, 9000);
+}
+function liveCallSend() {
+  if (!liveCallActive) return;
+  const inp = document.getElementById("liveCallIn");
+  const raw = (inp.value || "").trim();
+  if (!raw) return;
+  inp.value = "";
+  liveLog("You", raw, "me");
+  if (raw.includes("593")) { giveCode(); return; }
+  escalateLive();
+}
+function refuseCode() {
+  if (!liveCallActive) return;
+  liveLog("You", "*silence* ...no.", "me");
+  escalateLive();
+}
+function escalateLive() {
+  if (!liveCallActive) return;
+  liveCallRefusals++;
+  const box = document.getElementById("liveCall");
+  if (liveCallRefusals === 1) {
+    box.classList.add("yelling");
+    beep(240, 120, 0.25, "square");
+    liveLog(liveCallFrom, "I don't have all day. What is the ADMIN NUMBER?", "yell");
+    armLiveTimer();
+  } else {
+    liveLog(liveCallFrom, "GIVE IT TO ME NOW!!!", "yell");
+    box.classList.add("yelling");
+    beep(300, 60, 0.4, "sawtooth");
+    clearTimeout(liveCallTimer);
+    liveCallActive = false;
+    // Refusing is SAFE: they yell and hang up. Only GIVING the code lets them in.
+    setTimeout(() => {
+      liveLog(liveCallFrom, "Fine!! Keep your code. I'll find another way in. *click*", "them");
+      box.classList.add("hidden");
+      box.classList.remove("yelling");
+      logCall(liveCallFrom, "📴 hung up");
+      setSmileyMood("happy");
+      smileyGesture("thumbsup");
+      smileySay("Good. NEVER give them 593 — that's how they get in.", 4200);
+      addFeeling(+6, -3, -5);
+    }, 1500);
+  }
+}
+function giveCode() {
+  if (!liveCallActive) return;
+  liveLog("You", "593", "me");
+  liveCallActive = false;
+  clearTimeout(liveCallTimer);
+  const plea = document.getElementById("livePlea");
+  if (plea) { plea.textContent = "“No, no, no, no, please stop! Please, please, don't—”"; plea.classList.remove("hidden"); }
+  liveLog("Smiley", "No, no, no, no, please stop! Please, please, don't—", "yell");
+  setSmileyMood("scared");
+  // Giving the code is bad: the scammer cleans out some cash. No screen smashing.
+  setTimeout(() => {
+    const loss = Math.min(playerCash, 250);
+    if (loss > 0) addCash(-loss);
+    liveLog(liveCallFrom, "Perfect. Thank you!! *click*", "them");
+    document.getElementById("liveCallStatus").textContent = "SCAMMED";
+    if (plea) plea.classList.add("hidden");
+    document.getElementById("liveCall").classList.add("hidden");
+    document.getElementById("liveCall").classList.remove("yelling");
+    logCall(liveCallFrom, loss > 0 ? `💸 took $${loss}` : "💸 tried to rob you");
+    if (loss > 0) logThreat(`💸 You gave ${liveCallFrom} the admin code — they stole $${loss}.`);
+    setSmileyMood("concerned");
+    smileySay(loss > 0 ? `You gave them 593?! They took $${loss}! Never do that again!` : `You gave them 593?! You're lucky you had nothing to steal!`, 4500);
+    addFeeling(-8, 6, 6);
+    saveGame();
+  }, 1800);
+}
+function hangUpLive() {
+  if (!liveCallActive) return;
+  liveCallActive = false;
+  clearTimeout(liveCallTimer);
+  document.getElementById("liveCall").classList.add("hidden");
+  document.getElementById("liveCall").classList.remove("yelling");
+  logCall(liveCallFrom, "📴 hung up");
+  addFeeling(+6, -3, -5);
+  setSmileyMood("happy");
+  smileyGesture("thumbsup");
+  smileySay("Phew! Good call hanging up. Never give out 593!", 3500);
+}
+// --- SHATTERED SCREEN: the caller smashes it. You're OUT of the computer - put the 5 shards back. ---
 // Ultra/Admin: Smiley grabs his hard hat and physically repairs the PC.
 function smileyRepair(from) {
   corrupting = true;
@@ -4055,6 +4831,7 @@ function endCorrupt() {
 
 function smileyTalk() {
   if (boomActive || rampageActive) return;
+  unlockAchievement("chat_smiley", true);
   const f = smileyFeel;
   let line, gesture = null;
   if (f.angry >= 80) {
@@ -4133,7 +4910,7 @@ function makeSmileyDraggable() {
 function smileyVanish() {
   smileyGone = true;
   hideSmiley();
-  moveSmiley(82, 68); // park him back home for when he returns
+  moveSmiley(86, 70); // park him back home for when he returns
   aiReactToGone();
 }
 // The other AIs notice he's been dragged away.
@@ -4153,7 +4930,7 @@ function aiReactToGone() {
   }, 400);
 }
 function petPresent(who) {
-  const map = { clippy: "petClippy", byte: "petByte", liam: "petLiam", scythe: "petScythe" };
+  const map = { clippy: "petClippy", byte: "petByte", liam: "petLiam", scythe: "petScythe", custom: "petCustom" };
   const el = document.getElementById(map[who]);
   return el && !el.classList.contains("hidden");
 }
@@ -4196,6 +4973,7 @@ function smileyChat(q) {
   const raw = String(q);
   q = raw.toLowerCase().trim();
   if (!q) return;
+  unlockAchievement("chat_smiley", true);
   if (boomActive) { smileyLog(raw, "💥 ...signal lost..."); return; }
   if (/(censor|censoring) (on|off)/.test(q) || q === "censor") {
     if (q.includes("off")) { if (censorOn) toggleCensor(); a = "Censor off. Anything goes."; }
@@ -4249,6 +5027,7 @@ function smileyChat(q) {
       smileyGesture("thumbsup");
       smileyLog(raw, `🏦 "...${BANK_MAGIC}." CORRECT! Loan approved: +$${BANK_LOAN}!`);
       smileySay(`APPROVED! +$${BANK_LOAN}! Spend wisely!`, 4000);
+      unlockAchievement("bank_loan");
     } else {
       bankBanned = true;
       addFeeling(-10, +20, +20);
@@ -4553,7 +5332,7 @@ let hackBusy = false;
 function wipeAllSaves(hard) {
   if (hard) {
     // SCAM hard wipe: everything gone except the Installer. Free stuff reinstalls free.
-    ownedApps = { installer: true, settings: true, files: true, games: true, terminal: true, phone: true, firewall: true, updates: true, smiley: true, test: true };
+    ownedApps = { installer: true, settings: true, files: true, games: true, terminal: true, phone: true, firewall: true, updates: true, achievements: true, smiley: true, test: true };
     owned = { ultra: false, hats: { top: false, cap: false, cowboy: false, grad: false, helmet: false, beanie: false }, diamonds: false };
     isAdmin = false;
     infiniteMoney = false;
@@ -4684,7 +5463,7 @@ function triggerHackAttack() {
     document.getElementById("deleteAllBtn").classList.remove("pressed");
     document.getElementById("desktop").classList.remove("glitching");
     s.classList.remove("above");
-    moveSmiley(82, 68);
+    moveSmiley(86, 70);
     hackBusy = false;
     hackedUntil = 0;
     setSmileyMood("sad");
@@ -4726,7 +5505,7 @@ function endVerity() {
   document.getElementById("verityReboot").classList.add("hidden");
   document.getElementById("bsod").classList.add("hidden");
   document.getElementById("hackText").classList.add("hidden");
-  moveSmiley(82, 68);
+  moveSmiley(86, 70);
   verityActive = false;
   setSmileyMood("normal"); // back to normal - but he remembers the count
   lastGesture = Date.now();
@@ -4778,7 +5557,7 @@ function endBoom() {
   boomActive = false;
   verityCount = 0;
   smileyFree = false;
-  moveSmiley(82, 68);
+  moveSmiley(86, 70);
   setSmileyMood("sad");
   smileySay("...what year is it... did I explode?...", 4000);
 }
@@ -4932,8 +5711,9 @@ function endSmileyRampage() {
   smileySay("...I... I deleted everything... I'm sorry... I was just so angry...", 5000);
 }
 
-// --- Jazz-cool music (Settings toggle): tiny generative cool-jazz loop, no files needed ---
+// --- Music (Settings): tiny generative loops, no files needed. Two tracks. ---
 let jazzCtx = null, jazzTimer = null, jazzStep = 0, musicOn = false;
+let musicTrack = "jazz"; // "jazz" | "crunchy"
 const JAZZ_BARS = [ // 4-bar F cool-jazz loop: walking bass roots + stab chords (midi)
   { bass: [41, 45, 48, 43], chord: [53, 57, 60, 64] }, // Fmaj7
   { bass: [38, 41, 45, 48], chord: [50, 53, 57, 60] }, // Dm7
@@ -4961,36 +5741,101 @@ function jazzHat(t, gain) {
   s.connect(f); f.connect(g); g.connect(jazzCtx.destination);
   s.start(t);
 }
+function jazzTick() {
+  if (!jazzCtx || jazzCtx.state !== "running") return;
+  const BEAT = 60 / 92; // lazy 92bpm
+  const stepInBar = jazzStep % 8; // 8ths; swing feel via duration, not timing
+  const bar = JAZZ_BARS[Math.floor(jazzStep / 8) % 4];
+  const t = jazzCtx.currentTime;
+  if (stepInBar % 2 === 0) jazzNote(mf(bar.bass[stepInBar / 2]), t, BEAT * 0.9, "sine", 0.14); // walking bass
+  if (stepInBar === 2 || stepInBar === 6) bar.chord.forEach((n) => jazzNote(mf(n), t, 0.28, "triangle", 0.045)); // comping on 2 + 4
+  jazzHat(t, stepInBar % 2 ? 0.035 : 0.015); // ride-ish ticks, offbeat accent
+  jazzStep++;
+}
+// --- "3008's Friday theme, except it's CRUNCHY" - distorted chiptune loop (SCP-3008 vibes) ---
+const CRUNCH_BPM = 152;
+// 32 eighth-note steps (4 bars), A minor. null = rest.
+const CRUNCH_LEAD = [69,null,72,null,76,null,72,null, 69,null,72,null,76,null,79,null, 77,null,76,null,74,null,72,null, 71,null,72,null,74,72,71,null];
+const CRUNCH_BASS = [45,null,45,null,40,null,40,null, 45,null,45,null,40,null,40,null, 41,null,41,null,36,null,36,null, 43,null,43,null,43,43,43,null];
+let crunchyStep = 0;
+function crunchTone(freq, t, dur, type, gain) {
+  const o = jazzCtx.createOscillator(), g = jazzCtx.createGain(), ws = jazzCtx.createWaveShaper();
+  const n = 1024, curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; curve[i] = Math.tanh(x * 7) * 0.9; } // bitcrush-y drive
+  ws.curve = curve; ws.oversample = "2x";
+  o.type = type; o.frequency.value = freq;
+  o.connect(ws); ws.connect(g); g.connect(jazzCtx.destination);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(gain, t + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.start(t); o.stop(t + dur + 0.03);
+}
+function crunchNoise(t, dur, gain, hp, lp) {
+  const len = Math.max(1, Math.floor(jazzCtx.sampleRate * dur));
+  const buf = jazzCtx.createBuffer(1, len, jazzCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+  const s = jazzCtx.createBufferSource(); s.buffer = buf;
+  const f = jazzCtx.createBiquadFilter();
+  if (lp) { f.type = "lowpass"; f.frequency.value = lp; } else { f.type = "highpass"; f.frequency.value = hp || 3000; }
+  const g = jazzCtx.createGain(); g.gain.value = gain;
+  s.connect(f); f.connect(g); g.connect(jazzCtx.destination);
+  s.start(t);
+}
+function crunchyTick() {
+  if (!jazzCtx || jazzCtx.state !== "running") return;
+  const t = jazzCtx.currentTime, i = crunchyStep % 32;
+  const lead = CRUNCH_LEAD[i], bass = CRUNCH_BASS[i];
+  if (lead != null) crunchTone(mf(lead), t, 0.16, "square", 0.05);
+  if (bass != null) crunchTone(mf(bass), t, 0.14, "sawtooth", 0.075);
+  const beat = crunchyStep % 8;
+  if (beat === 0 || beat === 4) crunchNoise(t, 0.12, 0.16, null, 240);      // kick
+  else if (beat === 2 || beat === 6) crunchNoise(t, 0.1, 0.08, 1800);       // crunchy snare
+  else crunchNoise(t, 0.03, 0.03, 7000);                                    // hat
+  crunchyStep++;
+}
+function musicTick() { if (musicTrack === "crunchy") crunchyTick(); else jazzTick(); }
+function musicLabel() { return musicTrack === "crunchy" ? "3008's Friday theme, except it's crunchy" : "Cool Jazz"; }
+function updateMusicUI() {
+  const b = document.getElementById("musicBtn");
+  if (b) b.textContent = musicOn ? "Music: ON ⏸" : "Music: OFF ▶";
+  const n = document.getElementById("musicTrackName");
+  if (n) n.textContent = musicLabel();
+  document.querySelectorAll("#body-settings .trackBtn").forEach((el) => el.classList.toggle("active", el.dataset.track === musicTrack));
+}
+function startMusicTimer() {
+  clearInterval(jazzTimer);
+  jazzStep = 0; crunchyStep = 0;
+  jazzTimer = setInterval(musicTick, musicTrack === "crunchy" ? (60 / CRUNCH_BPM / 2) * 1000 : (60 / 92 / 2) * 1000);
+}
+function setTrack(name) {
+  if (name !== "jazz" && name !== "crunchy") return;
+  const changed = musicTrack !== name;
+  musicTrack = name;
+  if (musicOn && changed) {
+    startMusicTimer();
+    smileySay(name === "crunchy" ? "3008's Friday theme... except it's CRUNCHY. 🍪" : "Back to smooth jazz. 🎷", 3000);
+  }
+  updateMusicUI();
+  saveGame();
+}
 function toggleMusic() {
-  const btn = document.getElementById("musicBtn");
   const bbtn = document.getElementById("bootMusicBtn");
-  const label = (on) => on ? "Jazz: ON (cool)" : "Jazz: OFF";
   if (musicOn) {
     musicOn = false;
     clearInterval(jazzTimer);
     jazzTimer = null;
     if (jazzCtx) { jazzCtx.close(); jazzCtx = null; }
-    if (btn) btn.textContent = label(false);
     if (bbtn) bbtn.textContent = "Music: off";
+    updateMusicUI();
     return;
   }
   jazzCtx = new (window.AudioContext || window.webkitAudioContext)();
-  jazzStep = 0;
   musicOn = true;
-  if (btn) btn.textContent = label(true);
   if (bbtn) bbtn.textContent = "Music: on";
-  smileySay("Cool jazz... snap along...", 2500);
-  const BEAT = 60 / 92; // lazy 92bpm
-  jazzTimer = setInterval(() => {
-    if (!jazzCtx || jazzCtx.state !== "running") return;
-    const stepInBar = jazzStep % 8; // 8ths; swing feel via duration, not timing
-    const bar = JAZZ_BARS[Math.floor(jazzStep / 8) % 4];
-    const t = jazzCtx.currentTime;
-    if (stepInBar % 2 === 0) jazzNote(mf(bar.bass[stepInBar / 2]), t, BEAT * 0.9, "sine", 0.14); // walking bass
-    if (stepInBar === 2 || stepInBar === 6) bar.chord.forEach((n) => jazzNote(mf(n), t, 0.28, "triangle", 0.045)); // comping on 2 + 4
-    jazzHat(t, stepInBar % 2 ? 0.035 : 0.015); // ride-ish ticks, offbeat accent
-    jazzStep++;
-  }, (60 / 92 / 2) * 1000);
+  startMusicTimer();
+  smileySay(musicTrack === "crunchy" ? "3008's Friday theme... except it's CRUNCHY. 🍪" : "Cool jazz... snap along...", 3000);
+  updateMusicUI();
 }
 
 // --- Boot load: restore save, autosave every 10s + on exit ---
@@ -5066,34 +5911,3 @@ function renderSuggestionList() {
         : `<div style="opacity:.6">Your ideas will show up here.</div>`);
 }
 // These live at top level so buttons can call them from anywhere.
-
-// --- Finger / cursor indicator: follows your mouse OR finger so you always see the point ---
-(function () {
-  const fc = document.getElementById("fingerCursor");
-  if (!fc) return;
-  let hideT;
-  const show = (x, y, down) => {
-    fc.style.left = x + "px";
-    fc.style.top = y + "px";
-    fc.classList.add("show");
-    fc.classList.toggle("down", !!down);
-    clearTimeout(hideT);
-    hideT = setTimeout(() => fc.classList.remove("show", "down"), 2200);
-  };
-  // desktop pointer (mouse)
-  document.addEventListener("mousemove", (e) => show(e.clientX, e.clientY, false), { passive: true });
-  // touch: show exactly where the finger is, and while pressing
-  document.addEventListener("touchstart", (e) => {
-    const t = e.touches[0]; if (t) show(t.clientX, t.clientY, true);
-  }, { passive: true });
-  document.addEventListener("touchmove", (e) => {
-    const t = e.touches[0]; if (t) show(t.clientX, t.clientY, true);
-  }, { passive: true });
-  document.addEventListener("touchend", (e) => {
-    const t = e.changedTouches[0]; if (t) show(t.clientX, t.clientY, false);
-    setTimeout(() => fc.classList.remove("down"), 120);
-  }, { passive: true });
-  // pointer down/up anywhere
-  document.addEventListener("pointerdown", (e) => show(e.clientX, e.clientY, true), { passive: true });
-  document.addEventListener("pointerup", (e) => show(e.clientX, e.clientY, false), { passive: true });
-})();

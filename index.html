@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Smiley AI</title>
-<link rel="stylesheet" href="style.css?v=80" />
+<link rel="stylesheet" href="style.css?v=119" />
 </head>
 <body>
 
@@ -37,6 +37,7 @@
     <div>
       <button id="powerBtn">▶ Boot Desktop</button>
       <button onclick="toggleFullscreen()">⛶ Fullscreen</button>
+      <button onclick="openCredits()">👑 Credits</button>
       <button onclick="location.reload()">⟳ Refresh (deletes everything)</button>
     </div>
   </div>
@@ -76,9 +77,6 @@
       <div id="handR" class="s-hand right hidden">👋</div>
     </div>
   </div>
-
-  <!-- finger/cursor indicator: shows where your mouse or finger is -->
-  <div id="fingerCursor">👆</div>
 
   <!-- MAFIA REVENGE: screen breaks, pixel hand crushes Smiley -->
   <div id="mafiaScreen" class="hidden">
@@ -266,6 +264,28 @@
       </div>
     </div>
   </div>
+  <!-- LIVE CALL: answering connects you to a REAL (hostile) person who wants your admin number -->
+  <div id="liveCall" class="hidden">
+    <div class="livecall-box">
+      <div class="livecall-top">
+        <div class="livecall-avatar">👤</div>
+        <div class="livecall-who">
+          <div id="liveCallName">Unknown Number</div>
+          <div id="liveCallStatus">Connected</div>
+        </div>
+        <div class="livecall-bars"><span></span><span></span><span></span><span></span></div>
+      </div>
+      <div id="liveCallLog" class="call-log"></div>
+      <div id="livePlea" class="live-plea hidden"></div>
+      <div class="livecall-controls">
+        <input id="liveCallIn" type="text" placeholder="type your reply..." />
+        <button onclick="liveCallSend()">Send</button>
+        <button class="rude" onclick="refuseCode()">🙅 Refuse</button>
+        <button class="ok" onclick="giveCode()">✅ Give admin number</button>
+        <button onclick="hangUpLive()">📴 Hang up</button>
+      </div>
+    </div>
+  </div>
   <!-- Corrupted PC screen (answered spam without Ultra/Admin) -->
   <div id="corruptScreen" class="hidden">
     <div class="bsod-box">
@@ -318,6 +338,8 @@
     <button data-app="phone">📞 Phone</button>
     <button data-app="firewall">🧱 Firewall</button>
     <button data-app="updates">📋 Updates</button>
+    <button data-app="achievements">🏆 Achievements</button>
+    <button data-app="fanart">🖼️ Fan Art</button>
     <button data-app="smiley">🙂 Smiley AI</button>
     <button data-app="settings">⚙️ Settings</button>
     <button data-app="installer">📦 Installer</button>
@@ -327,9 +349,29 @@
     <button data-app="smileyorg">🌟 Smiley.org</button>
     <button data-app="liam">🧠 Liam AI</button>
     <button data-app="admin" id="startAdmin" class="hidden">🛡️ Admin</button>
+    <button onclick="openCredits()">👑 Credits</button>
   </div>
 </div>
 
-<script src="script.js?v=80"></script>
+<!-- CREDITS: the people (and AIs) behind Smiley AI. Body-level so it works from the main menu too. -->
+<div id="creditsScreen" class="hidden">
+  <div class="credits-box">
+    <div class="crown">👑</div>
+    <h2>Credits</h2>
+    <p style="color:#9fb3d1;font-size:12px;margin:0">The people (and AIs) behind Smiley AI</p>
+    <hr class="credits-hr">
+    <div class="credits-team">
+      <div>👑 <b>Liam</b> — the owner</div>
+      <div>🎨 <b>Ainsley</b> — the helper</div>
+      <div>✨ <b>J</b> — the helper</div>
+      <hr class="credits-hr">
+      <div>🤖 <b>DeepSeek</b> — the AI that helped build it</div>
+      <div>🙂 <b>Smiley</b> — your buddy</div>
+    </div>
+    <button onclick="closeCredits()">Close</button>
+  </div>
+</div>
+
+<script src="script.js?v=119"></script>
 </body>
 </html>
