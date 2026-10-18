@@ -125,6 +125,8 @@ const ACHIEVEMENTS = [
   { id: "play_game", name: "Gamer", icon: "🎮", desc: "Play a mini-game in Games." },
   { id: "win_clicker", name: "Click Master", icon: "🖱️", desc: "Win Smiley Clicker." },
   { id: "win_lucky", name: "Lucky Seven", icon: "🎰", desc: "Win Lucky 7." },
+  { id: "fnaf", name: "Night Guard", icon: "🐻", desc: "Survive Five Nights at Smiley's until 6 AM." },
+  { id: "smileyorg_game", name: "Final Boss Fan", icon: "🌟", desc: "Play the final game, Smiley.org." },
   { id: "wear_hat", name: "Hat Person", icon: "🎩", desc: "Equip any hat." },
   { id: "buy_ultra", name: "Ultra Fan", icon: "😎", desc: "Unlock Ultra detail." },
   { id: "install_pet", name: "AI Collector", icon: "📎", desc: "Install a rival AI." },
@@ -1873,6 +1875,7 @@ function renderBody(id) {
       </div>
       <p style="font-size:12px;margin:2px 0 6px">Click any update to watch its trailer — Smiley narrates it out loud. ▶</p>
       <div class="call-log up-list" style="max-height:260px">
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.28</b> - THE ARCADE: search "games" in the Browser (it's NOT one of the quick links — you have to search it) to open the Arcade. It has FNAF-style <b>Five Nights at Smiley's</b> (slam the doors, survive to 6 AM, +$150), <b>Smiley Clicker</b>, and the FINAL game <b>Smiley.org</b> — where you see Smiley's WHOLE BODY and everything he does: wave, jump, dance, talk, sleep, get angry, spin.</div>
         <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.27</b> - NO MORE SMASHING: the screen-smashing and glass-shard repair are GONE (it got annoying). Giving the scammer your code now just robs you — he takes up to $250 — and Smiley scolds you. Refusing a call is always safe. Also: the music track picker (Cool Jazz / 3008's crunchy theme).</div>
         <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.26</b> - CRUNCHY FRIDAY: Settings now has a music track picker. Pick "Cool Jazz" or the new "3008's Friday theme, except it's CRUNCHY" — a distorted chiptune loop. Your choice is saved with your game.</div>
         <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.25</b> - SAFE REFUSALS: refusing the spam caller is safe — they yell and hang up. NEVER give them your code; if you do, they'll rob you.</div>
@@ -2325,13 +2328,33 @@ function webHome() {
     <h3>🐱 Sam's Blog</h3>
     <p><i>Latest post:</i> "My two favorite things? <b>painting</b> because colors are fun, and <b>naps</b> because naps are great. I use them for EVERYTHING lol."</p>
     <p style="color:#888">New posts every Friday! Search above to look things up.</p>
-    <p>👻 New: <button onclick="webShow('ghost')">The Ghost in the Desktop (talking story!)</button></p>`;
+    <p>👻 New: <button onclick="webShow('ghost')">The Ghost in the Desktop (talking story!)</button></p>
+    <p>🕹️ Psst — search <b>games</b> up top to open the arcade (and the FINAL game, Smiley.org).</p>`;
 }
 function webShow(q) {
   const v = document.getElementById("webView");
   if (!v) return;
   q = String(q || "").toLowerCase().trim();
-  if (q.includes("car") || q.includes("auto") || q.includes("drive")) {
+  if (q.includes("game") || q.includes("smiley.org") || q.includes("smileyorg") || q.includes("arcade")) {
+    // The arcade: every game on this computer. Reachable by SEARCHING "games" (not a quick link).
+    v.innerHTML = `<h3>🕹️ Arcade - Games</h3>
+      <p style="font-size:12px;color:#888">Every game on this computer. Work your way down to the FINAL game.</p>
+      <div class="arcade-card">
+        <div class="ac-thumb">🐻</div>
+        <div class="ac-info"><b>Five Nights at Smiley's</b><span>FNAF-style survival. Slam the doors and make it to 6 AM.</span></div>
+        <button onclick="startFNAF()">▶ Play</button>
+      </div>
+      <div class="arcade-card">
+        <div class="ac-thumb">🖱️</div>
+        <div class="ac-info"><b>Smiley Clicker</b><span>Click the ball 10 times — $30 a round.</span></div>
+        <button onclick="openApp('games')">▶ Play</button>
+      </div>
+      <div class="arcade-card final">
+        <div class="ac-thumb">🌟</div>
+        <div class="ac-info"><b>Smiley.org — THE FINAL GAME</b><span>See Smiley's WHOLE BODY and everything he does: wave, jump, dance, talk, sleep, get angry, spin.</span></div>
+        <button onclick="startSmileyOrg()">▶ Play</button>
+      </div>`;
+  } else if (q.includes("car") || q.includes("auto") || q.includes("drive")) {
     v.innerHTML = `<h3>🚗 Pixel Motors - used cars</h3>
       <div class="email">🚙 Clown Car - $500. Seats 12 clowns. Smells funny.</div>
       <div class="email">🚗 Sedan-ish - $4,200. Only driven to church... and 3 demolition derbies.</div>
@@ -5911,3 +5934,163 @@ function renderSuggestionList() {
         : `<div style="opacity:.6">Your ideas will show up here.</div>`);
 }
 // These live at top level so buttons can call them from anywhere.
+
+// ===== ARCADE: shared overlay + the games you can reach by searching "games" =====
+function openGameOverlay(title) {
+  const ov = document.getElementById("gameOverlay");
+  if (!ov) return;
+  ov.classList.remove("hidden");
+  const t = document.getElementById("goTitle");
+  if (t) t.textContent = title;
+}
+function closeGameOverlay() {
+  const ov = document.getElementById("gameOverlay");
+  if (ov) ov.classList.add("hidden");
+  if (fnafState) { clearInterval(fnafState.id); fnafState = null; }
+}
+// --- Five Nights at Smiley's: the bear comes to a door, slam it before the timer runs out. ---
+let fnafState = null;
+function startFNAF() {
+  openGameOverlay("🐻 Five Nights at Smiley's");
+  const s = document.getElementById("gameStage");
+  if (!s) return;
+  s.innerHTML = `
+    <div class="fnaf">
+      <div class="fnaf-hud"><span>Time: <b id="fnafClock">12 AM</b></span><span>Progress: <b id="fnafPct">0%</b></span></div>
+      <div class="fnaf-office" id="fnafOffice">
+        <div class="fnaf-door left" id="fnafDoorL" onclick="fnafCloseDoor('L')"><span class="fnaf-btn">◀ SLAM</span></div>
+        <div class="fnaf-desk">🖥️</div>
+        <div class="fnaf-door right" id="fnafDoorR" onclick="fnafCloseDoor('R')"><span class="fnaf-btn">SLAM ▶</span></div>
+        <div class="fnaf-bear hidden" id="fnafBear">🐻</div>
+      </div>
+      <p class="fnaf-msg" id="fnafMsg">A bear is coming down the halls. When it shows up at a door, SLAM that door fast. Survive to 6 AM.</p>
+    </div>`;
+  setSmileyMood("scared");
+  smileySay("Five Nights at Smiley's?! I don't like this game. Slam the doors!", 4000);
+  if (fnafState) clearInterval(fnafState.id);
+  fnafState = { t: 0, total: 70000, side: null, wait: 1500, warn: 0, over: false, id: null };
+  fnafState.id = setInterval(fnafTick, 100);
+}
+function fnafTick() {
+  const st = fnafState;
+  if (!st || st.over) return;
+  const office = document.getElementById("fnafOffice");
+  if (!office) { clearInterval(st.id); fnafState = null; return; }
+  st.t += 100;
+  const pct = Math.min(100, Math.round((st.t / st.total) * 100));
+  const hr = Math.min(6, Math.floor(st.t / (st.total / 6)));
+  const cl = document.getElementById("fnafClock"), pc = document.getElementById("fnafPct");
+  if (cl) cl.textContent = (hr === 0 ? 12 : hr) + " AM";
+  if (pc) pc.textContent = pct + "%";
+  if (st.t >= st.total) { fnafWin(); return; }
+  if (st.side) {
+    st.warn -= 100; // the bear is at a door - react now
+    if (st.warn <= 0) { fnafLose(); return; }
+  } else {
+    st.wait -= 100;
+    if (st.wait <= 0) {
+      st.side = Math.random() < 0.5 ? "L" : "R";
+      st.warn = Math.max(900, 1800 - Math.round(pct * 9)); // gets faster as the night goes on
+      const bear = document.getElementById("fnafBear");
+      if (bear) bear.className = "fnaf-bear at-" + (st.side === "L" ? "left" : "right");
+      beep(210, 90, 0.18, "square");
+      setSmileyMood("scared");
+    }
+  }
+}
+function fnafCloseDoor(side) {
+  const st = fnafState;
+  if (!st || st.over) return;
+  const msg = document.getElementById("fnafMsg");
+  if (st.side === side) {
+    st.side = null;
+    st.wait = 1500 + Math.random() * 1800;
+    const bear = document.getElementById("fnafBear");
+    if (bear) bear.className = "fnaf-bear hidden";
+    beep(620, 300, 0.14, "triangle");
+    if (msg) msg.textContent = "SLAM! Blocked. 😅";
+  } else if (msg) {
+    msg.textContent = "Nothing at that door... yet.";
+  }
+}
+function fnafLose() {
+  const st = fnafState;
+  st.over = true;
+  clearInterval(st.id);
+  const bear = document.getElementById("fnafBear");
+  if (bear) bear.className = "fnaf-bear scare";
+  beep(90, 40, 1.1, "sawtooth");
+  setSmileyMood("angry");
+  const msg = document.getElementById("fnafMsg");
+  if (msg) msg.innerHTML = `<b style="color:#ff6b6b">JUMPSCARE! You didn't slam the door.</b><button onclick="startFNAF()">Try again</button>`;
+  smileySay("AAAH! Okay, night over. Try again, quick!", 3200);
+}
+function fnafWin() {
+  const st = fnafState;
+  st.over = true;
+  clearInterval(st.id);
+  addCash(150);
+  unlockAchievement("fnaf");
+  setSmileyMood("happy");
+  const msg = document.getElementById("fnafMsg");
+  if (msg) msg.innerHTML = `<b style="color:#7cff7c">6 AM! You survived the night! +$150</b><button onclick="startFNAF()">Play again</button>`;
+  smileySay("6 AM! You made it! I was hiding under the desk the whole time.", 4200);
+}
+// --- Smiley.org: the FINAL game. See his whole body and everything he does. ---
+function startSmileyOrg() {
+  openGameOverlay("🌟 Smiley.org — the final game");
+  const s = document.getElementById("gameStage");
+  if (!s) return;
+  s.innerHTML = `
+    <div class="so-wrap">
+      <h3>🌟 Smiley.org</h3>
+      <p style="font-size:13px;color:#b9c6da;margin:2px 0 10px">The official Smiley AI homepage. This is his <b>WHOLE BODY</b> — head, body, arms, legs and all. Press a button to see what he does.</p>
+      <div class="so-stage">
+        <div class="so-smiley" id="soSmiley">
+          <div class="so-antenna"></div>
+          <div class="so-head">
+            <div class="so-eye l"></div><div class="so-eye r"></div>
+            <div class="so-cheek l"></div><div class="so-cheek r"></div>
+            <div class="so-mouth"></div>
+          </div>
+          <div class="so-body"></div>
+          <div class="so-arm l"></div><div class="so-arm r"></div>
+          <div class="so-leg l"></div><div class="so-leg r"></div>
+        </div>
+      </div>
+      <div class="so-btns">
+        <button onclick="soDo('wave')">👋 Wave</button>
+        <button onclick="soDo('jump')">⬆️ Jump</button>
+        <button onclick="soDo('dance')">🕺 Dance</button>
+        <button onclick="soDo('talk')">💬 Talk</button>
+        <button onclick="soDo('sleep')">😴 Sleep</button>
+        <button onclick="soDo('angry')">😠 Angry</button>
+        <button onclick="soDo('spin')">🔄 Spin</button>
+      </div>
+      <div class="so-log" id="soLog">Press a button to see what Smiley does.</div>
+    </div>`;
+  unlockAchievement("smileyorg_game");
+  setSmileyMood("happy");
+  smileySay("Welcome to Smiley.org! That's... that's my WHOLE BODY. I'm so proud.", 4200);
+}
+function soDo(action) {
+  const el = document.getElementById("soSmiley");
+  if (!el) return;
+  el.className = "so-smiley";
+  void el.offsetWidth; // restart the CSS animation
+  el.classList.add(action);
+  const lines = {
+    wave: "👋 Smiley waves hello! He waves at everyone — even spam callers, before you ban them.",
+    jump: "⬆️ Smiley hops! He hops when he's happy, when you poke him, and whenever he hears the word 'snack'.",
+    dance: "🕺 Smiley dances! He wiggles side to side. He has no real legs and does not care.",
+    talk: "💬 Smiley talks! He blinks, opens his jaw and babbles. Press C on the desktop to chat with him.",
+    sleep: "😴 Smiley sleeps! He lives in the corner and naps between updates. Shh.",
+    angry: "😠 Smiley is ANGRY! Say 'verity' too many times, or refuse his advice, and you'll see this face.",
+    spin: "🔄 Smiley spins! Just showing off the whole body: head, body, arms, legs and the little antenna.",
+  };
+  const log = document.getElementById("soLog");
+  if (log) log.textContent = lines[action] || "";
+  setSmileyMood(action === "angry" ? "angry" : action === "sleep" ? "normal" : "happy");
+  beep(action === "angry" ? 170 : 540, action === "angry" ? 80 : 950, 0.12, "square");
+  setTimeout(() => { const e2 = document.getElementById("soSmiley"); if (e2) e2.className = "so-smiley"; }, 2600);
+}

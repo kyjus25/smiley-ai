@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Smiley AI</title>
-<link rel="stylesheet" href="style.css?v=119" />
+<link rel="stylesheet" href="style.css?v=121" />
 </head>
 <body>
 
@@ -286,6 +286,11 @@
       </div>
     </div>
   </div>
+  <!-- Arcade game overlay: Five Nights at Smiley's + Smiley.org (the final game) -->
+  <div id="gameOverlay" class="hidden">
+    <div class="go-bar"><span id="goTitle">🎮</span><button onclick="closeGameOverlay()">✕ Close</button></div>
+    <div id="gameStage" class="go-stage"></div>
+  </div>
   <!-- Corrupted PC screen (answered spam without Ultra/Admin) -->
   <div id="corruptScreen" class="hidden">
     <div class="bsod-box">
@@ -372,6 +377,6 @@
   </div>
 </div>
 
-<script src="script.js?v=119"></script>
+<script src="script.js?v=121"></script>
 </body>
 </html>
