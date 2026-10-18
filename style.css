@@ -225,14 +225,14 @@ button { cursor: pointer; font-family: inherit; }
 :is(.smiley-face, .so-face)[data-mood="scared"] .s-eye { height: 20px; }
 :is(.smiley-face, .so-face)[data-mood="scared"] .s-mouth { width: 16px; height: 16px; border-radius: 50%; background: #111; }
 /* COOL: just sunglasses + a smirk */
-:is(.smiley-face, .so-face)[data-mood="cool"] .s-eyes { gap: 3px; top: 12px; }
 :is(.smiley-face, .so-face)[data-mood="cool"] .s-eyes::before {
-  content: ""; position: absolute; left: 50%; top: 50%; width: 12px; height: 3px;
+  content: ""; position: absolute; left: 50%; top: 50%; width: 18px; height: 3px;
   background: #141414; border-radius: 2px; transform: translate(-50%, -50%); z-index: 2;
 }
+/* same size as his normal eyes -- just blacked out like shades */
 :is(.smiley-face, .so-face)[data-mood="cool"] .s-eye {
-  width: 18px; height: 13px; background: #161616; border: 2px solid #0a0a0a;
-  border-radius: 5px; animation: none;
+  width: 15px; height: 19px; background: #161616; border: 2px solid #0a0a0a;
+  border-radius: 50%; animation: none;
 }
 :is(.smiley-face, .so-face)[data-mood="cool"] .s-pupil { display: none; }
 :is(.smiley-face, .so-face)[data-mood="cool"] .s-sparkle {
