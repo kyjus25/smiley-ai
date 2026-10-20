@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Smiley AI</title>
-<link rel="stylesheet" href="style.css?v=171" />
+<link rel="stylesheet" href="style.css?v=187" />
 </head>
 <body>
 
@@ -99,6 +99,7 @@
       <!-- little pop-up hands: hidden unless gesturing (wave / point / thumbs up / down) -->
       <div id="handL" class="s-hand left hidden">👋</div>
       <div id="handR" class="s-hand right hidden">👋</div>
+      <div id="smileyBlood" class="hidden"></div>
     </div>
   </div>
 
@@ -144,6 +145,7 @@
     <div id="petByte" class="pet hidden"><div class="pet-bub hidden"></div><div class="pet-face byte-face"><div class="b-antenna"></div><div class="b-eye l"></div><div class="b-eye r"></div><div class="b-mouth"></div></div><div class="pet-name">Byte</div><div id="stolenBoy" class="hidden">🎮</div></div>
     <div id="petLiam" class="pet hidden"><div class="pet-bub hidden"></div><div class="pet-face liam-face"><div class="li-eye l"></div><div class="li-eye r"></div><div class="li-mouth"></div></div><div class="pet-name">Liam</div></div>
     <div id="petScythe" class="pet hidden"><div class="pet-bub hidden"></div><div class="pet-face scythe-face"><div class="s-hat"></div><div class="sc-eye l"></div><div class="sc-eye r"></div><div class="sc-mouth"></div></div><div class="pet-name">Scythe</div></div>
+    <div id="petKinito" class="pet hidden"><div class="pet-bub hidden"></div><div class="pet-face kinito-face"><div class="ki-leaf"></div></div><div class="pet-name">Kinito</div></div>
   </div>
 
   <!-- VERITY MODE: fake hack + blue screen + demonic Smiley -->
@@ -344,6 +346,71 @@
       <button onclick="refreshGame()">⟳ Refresh Everything</button>
     </div>
   </div>
+  <!-- CORRUPT MODE (Liam's account → Admin → Corrupt Mode): a shadow stalks you. -->
+  <div id="shadowStalker" class="hidden" aria-hidden="true">
+    <div class="sh-body"></div>
+    <div class="sh-head"><span class="sh-eye l"></span><span class="sh-eye r"></span></div>
+  </div>
+  <div id="shadowSay" class="hidden">Good luck.</div>
+  <div id="corruptVignette" class="hidden"></div>
+  <div id="corruptModeScreen" class="hidden">
+    <div class="cm-wrap">
+      <div class="cm-shadow" id="cmShadow">
+        <div class="cm-body"></div>
+        <div class="cm-head"><span class="cm-eye l"></span><span class="cm-eye r"></span></div>
+      </div>
+      <h1 class="cm-line">You did this to yourself.</h1>
+      <button class="cm-refresh" onclick="refreshGame()">⟳ Refresh</button>
+    </div>
+  </div>
+  <!-- KINITO PET: the egg he hatches from (search "kinito" in the Browser) -->
+  <div id="kinitoEgg" class="hidden">
+    <div class="ki-egg-stage">
+      <div class="ki-egg" id="kiEgg">
+        <div class="ki-egg-half top"></div>
+        <div class="ki-egg-half bot"></div>
+        <div class="ki-egg-crack"></div>
+      </div>
+      <div class="ki-hatchling hidden" id="kiHatchling"></div>
+      <div class="ki-egg-line" id="kiEggLine">...</div>
+      <button id="kiEggBtn" class="hidden" onclick="finishKinitoHatch()">Hi, Kinito!</button>
+    </div>
+  </div>
+  <!-- KINITO: Question Time -->
+  <div id="kinitoQuiz" class="hidden">
+    <div class="ki-quiz-box">
+      <div class="ki-quiz-art" id="kiQuizArt"></div>
+      <h3 id="kiQuizQ">Who is your best friend?</h3>
+      <input id="kiQuizIn" maxlength="40" placeholder="type your answer..." autocomplete="off" />
+      <div class="ki-quiz-btns">
+        <button onclick="kinitoQuizAnswer()">Answer</button>
+        <button class="ki-quiz-x" onclick="closeKinitoQuiz()">✕</button>
+      </div>
+      <p id="kiQuizMsg"></p>
+    </div>
+  </div>
+  <!-- KINITO: the pop-up he puts up on his own -->
+  <div id="kinitoTrust" class="hidden">
+    <div class="ki-trust-box">
+      <div class="ki-trust-art" id="kiTrustArt"></div>
+      <h3>Do you trust me?</h3>
+      <div class="ki-trust-btns">
+        <button onclick="kinitoTrustAnswer(true)">Yes</button>
+        <button class="ki-no" onclick="kinitoTrustAnswer(false)">No</button>
+      </div>
+      <p id="kiTrustMsg"></p>
+    </div>
+  </div>
+  <!-- KINITO: the body you have to help him hide -->
+  <div id="kinitoBody" class="hidden" aria-label="Drag the body to the edge of the screen">
+    <div class="kb-hint">DRAG ME TO THE EDGE →</div>
+    <div class="kb-head"></div>
+    <div class="kb-torso"></div>
+    <div class="kb-leg l"></div>
+    <div class="kb-leg r"></div>
+    <div class="kb-glove l"></div>
+    <div class="kb-glove r"></div>
+  </div>
   <!-- Corrupted PC screen (answered spam without Ultra/Admin) -->
   <div id="corruptScreen" class="hidden">
     <div class="bsod-box">
@@ -431,6 +498,6 @@
   </div>
 </div>
 
-<script src="script.js?v=171"></script>
+<script src="script.js?v=187"></script>
 </body>
 </html>

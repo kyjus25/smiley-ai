@@ -168,6 +168,7 @@ const APPS = [
   { id: "dl_byte", name: "ByteBuddy", emoji: "🤖", price: 80 },
   { id: "smileyorg", name: "Smiley.org", emoji: "🌟", price: 100 },
   { id: "liam", name: "Liam AI", emoji: "🧠", price: 150 },
+  { id: "kinito", name: "Kinito Pet", emoji: "🩵", price: 120 },
   { id: "admin", name: "Admin", emoji: "🛡️", price: 0 },
   { id: "scythe", name: "Scythe AI", emoji: "🤠", price: 0 },
 ];
@@ -212,6 +213,8 @@ const ACHIEVEMENTS = [
   { id: "creator", name: "Smiley's Creator", icon: "👑", desc: "In Admin mode, tell the Phone scammer 523 to get owner permissions on Liam's account." },
   { id: "yuki", name: "Nice Job, Dumbass", icon: "🔮", desc: "Search \"yuki\", press the flickering Download button, and let him kill your whole PC." },
   { id: "photocopier", name: "Photocopier", icon: "📸", desc: "Unlock EVERY character and the Picture Board crown will pop." },
+  { id: "kinito_friend", name: "Best Friend", icon: "🩵", desc: "Hatch Kinito and answer his Question Time with \"kinito\"." },
+  { id: "kinito_hide", name: "Accomplice", icon: "🤝", desc: "Help Kinito hide something — drag the body to the end of the screen." },
 ];
 let unlockedAchievements = new Set();
 let ownerAccount = false; // true after the 523 owner code: you're on Liam's account with owner perms
@@ -288,6 +291,13 @@ function buyApp(id) {
   saveGame();
   setSmileyMood("happy");
   smileyGesture("thumbsup");
+  if (id === "kinito") {
+    if (openWins["installer"]) renderBody("installer");
+    setSmileyMood("happy");
+    smileyGesture("thumbsup");
+    kinitoEggStart();
+    return;
+  }
   if (id === "liam") {
     grantEverything();
     // Smiley is VERY happy + very nice to Liam (admin royalty treatment).
@@ -906,6 +916,170 @@ function adminCuss() {
     setTimeout(() => triggerSmileyRampage(), 1200);
   }
 }
+// --- CORRUPT MODE (Liam's account only): a shadow slowly stalks you. ---
+// There is no undo. It corrupts Smiley, then the whole PC, then leaves you in a
+// white room that says "You did this to yourself." Only a full refresh escapes.
+let corruptModeOn = false;
+let corruptPhase = 0;
+let corruptRaf = null;
+let corruptTimers = [];
+let corruptPointer = { x: 0, y: 0, moved: false };
+let corruptShadowPos = null;
+let corruptSpeed = 1; // debug/pacing multiplier (1 = real time)
+
+function corruptLater(fn, ms) {
+  const t = setTimeout(() => { if (!corruptModeOn) return; fn(); }, Math.max(1, ms * corruptSpeed));
+  corruptTimers.push(t);
+  return t;
+}
+
+function startCorruptMode() {
+  if (!ownerAccount) { smileySay("Corrupt Mode is for Liam's account... not yours.", 3500); return; }
+  if (corruptModeOn) return;
+  corruptModeOn = true;
+  corruptPhase = 1;
+  lastGesture = Date.now();
+  // make sure Smiley is on screen — the shadow needs someone to reach.
+  if (ownedApps.smiley && document.getElementById("smiley").classList.contains("hidden")) {
+    try { revealSmiley(false, true); } catch (e) {}
+  }
+  closeAllPopups();
+  document.getElementById("startMenu")?.classList.add("hidden");
+  const desk = document.getElementById("desktop");
+  const sh = document.getElementById("shadowStalker");
+  const vig = document.getElementById("corruptVignette");
+  desk.classList.add("corrupt-creep");
+  vig.classList.remove("hidden");
+  setSmileyMood("concerned");
+  lastGesture = Date.now();
+  smileySay("Hey... why is it getting dark in here?", 4200);
+
+  // It blinks in and out of the corners (or the middle), barely visible,
+  // then slowly drifts toward wherever you are.
+  const spots = [
+    { fx: 0.10, fy: 0.34 }, { fx: 0.90, fy: 0.34 },
+    { fx: 0.10, fy: 0.80 }, { fx: 0.90, fy: 0.80 },
+  ];
+  const pickSpot = () => {
+    const box = desk.getBoundingClientRect();
+    const s = spots[Math.floor(Math.random() * spots.length)];
+    return { x: box.left + box.width * s.fx, y: box.top + box.height * s.fy };
+  };
+  corruptShadowPos = pickSpot();
+  sh.classList.remove("hidden");
+  sh.style.left = corruptShadowPos.x + "px";
+  sh.style.top = corruptShadowPos.y + "px";
+  requestAnimationFrame(() => sh.classList.add("show"));
+
+  // re-appear somewhere else every few seconds
+  const relocate = () => {
+    if (!corruptModeOn || corruptPhase >= 2) return;
+    corruptShadowPos = pickSpot();
+    sh.style.left = corruptShadowPos.x + "px";
+    sh.style.top = corruptShadowPos.y + "px";
+    sh.classList.remove("show");
+    setTimeout(() => { if (corruptModeOn && corruptPhase < 2) sh.classList.add("show"); }, 160);
+    corruptLater(relocate, 2800 + Math.random() * 2600);
+  };
+  corruptLater(relocate, 700);
+
+  const onMove = (e) => { corruptPointer.x = e.clientX; corruptPointer.y = e.clientY; corruptPointer.moved = true; };
+  document.addEventListener("pointermove", onMove, { passive: true });
+  corruptTimers.push(() => document.removeEventListener("pointermove", onMove));
+
+  const stalk = () => {
+    if (!corruptModeOn) return;
+    const box = desk.getBoundingClientRect();
+    let tx, ty;
+    if (corruptPhase >= 2) {
+      // it stops following you and heads straight for Smiley.
+      const sr = document.getElementById("smileyFace").getBoundingClientRect();
+      tx = sr.left + sr.width / 2;
+      ty = sr.top + sr.height / 2;
+    } else if (corruptPointer.moved) {
+      tx = corruptPointer.x;
+      ty = corruptPointer.y;
+    } else {
+      // no mouse (mobile): drift toward the middle of the screen.
+      tx = box.left + box.width * 0.5;
+      ty = box.top + box.height * 0.62;
+    }
+    // very slow at first, picking up a little as it gets closer to dawn.
+    const k = 0.005 + Math.min(0.022, corruptPhase * 0.007);
+    corruptShadowPos.x += (tx - corruptShadowPos.x) * k;
+    corruptShadowPos.y += (ty - corruptShadowPos.y) * k;
+    sh.style.left = corruptShadowPos.x + "px";
+    sh.style.top = corruptShadowPos.y + "px";
+    corruptRaf = requestAnimationFrame(stalk);
+  };
+  corruptRaf = requestAnimationFrame(stalk);
+
+  const taunts = [
+    [3500, "Did you hear that?", "normal"],
+    [7500, "It's watching me. It's watching you too.", "concerned"],
+    [11500, "You invited it in. You clicked Corrupt Mode.", "scared"],
+    [15000, "Please. Please stop.", "scared"],
+  ];
+  taunts.forEach(([t, text, mood]) => corruptLater(() => {
+    lastGesture = Date.now();
+    setSmileyMood(mood);
+    smileySay(text, 3800);
+  }, t));
+
+  // Phase 2: it appears right behind Smiley and says good luck.
+  corruptLater(() => {
+    corruptPhase = 2;
+    lastGesture = Date.now();
+    if (corruptRaf) cancelAnimationFrame(corruptRaf);
+    corruptRaf = null;
+    setSmileyMood("hacked");
+    const sr = document.getElementById("smileyFace").getBoundingClientRect();
+    corruptShadowPos = { x: sr.left + sr.width / 2, y: sr.bottom + 34 };
+    sh.style.left = corruptShadowPos.x + "px";
+    sh.style.top = corruptShadowPos.y + "px";
+    sh.classList.add("show", "lunge");
+    const say = document.getElementById("shadowSay");
+    if (say) {
+      say.classList.remove("hidden");
+      say.style.left = Math.min(window.innerWidth - 150, sr.right + 14) + "px";
+      say.style.top = Math.max(8, sr.top - 14) + "px";
+    }
+    desk.classList.add("corrupt-glitch");
+    smileySay("I̷t̷'̷s̷ ̷i̷n̷ ̷m̷y̷ ̷h̷e̷a̷d̷—", 4200);
+    corruptLater(() => {
+      // Phase 3: everything else goes with him.
+      corruptPhase = 3;
+      closeAllPopups();
+      document.getElementById("corruptVignette")?.classList.add("taken");
+      desk.classList.add("corrupt-taken");
+      document.getElementById("icons")?.classList.add("corrupt-icons");
+      document.getElementById("taskbar")?.classList.add("corrupt-taskbar");
+      document.getElementById("shadowStalker")?.classList.remove("lunge");
+    }, 2600);
+  }, 17000);
+
+  // Phase 4: the white room.
+  corruptLater(() => {
+    corruptPhase = 4;
+    closeAllPopups();
+    if (corruptRaf) cancelAnimationFrame(corruptRaf);
+    corruptRaf = null;
+    // stop the glitch filters — they would invert the white room.
+    desk.classList.remove("corrupt-taken", "corrupt-glitch", "corrupt-creep");
+    document.getElementById("icons")?.classList.remove("corrupt-icons");
+    document.getElementById("taskbar")?.classList.remove("corrupt-taskbar");
+    document.getElementById("corruptVignette")?.classList.add("hidden");
+    document.getElementById("shadowSay")?.classList.add("hidden");
+    const scr = document.getElementById("corruptModeScreen");
+    scr.classList.remove("hidden");
+    requestAnimationFrame(() => scr.classList.add("show"));
+    const st = document.getElementById("shadowStalker");
+    st?.classList.remove("show");
+    setTimeout(() => st?.classList.add("hidden"), 900);
+    document.getElementById("cmShadow")?.classList.add("show");
+  }, 21500);
+}
+
 // Calm him down (Smiley AI app + chat "calm down" - works for everyone).
 function calmSmiley() {
   smileyFeel.angry = Math.max(0, smileyFeel.angry - 40);
@@ -1699,6 +1873,9 @@ function realFaceMarkup(kind) {
   if (kind === "fanart") {
     return wrap(`${fanSmiley(40, 40, 26)}`, 1.1);
   }
+  if (kind === "kinito") {
+    return wrap(`<div class="kinito-face">${KINITO_SVG}</div>`, 1.05);
+  }
   return wrap(`<div class="pb-generic">🎨</div>`, 1);
 }
 const PICTURE_CHARACTERS = [
@@ -1708,6 +1885,7 @@ const PICTURE_CHARACTERS = [
   { id: "clippy", name: "ClippyPlus", emoji: "📎", unlocked: () => !!ownedApps.dl_clippy, art: () => realFaceMarkup("clippy") },
   { id: "byte", name: "ByteBuddy", emoji: "🤖", unlocked: () => !!ownedApps.dl_byte, art: () => realFaceMarkup("byte") },
   { id: "liam", name: "Liam AI", emoji: "🧠", unlocked: () => !!ownedApps.liam, art: () => realFaceMarkup("liam") },
+  { id: "kinito", name: "Kinito Pet", emoji: "🩵", unlocked: () => !!ownedApps.kinito, art: () => realFaceMarkup("kinito") },
   { id: "fanart", name: "Fan Art", emoji: "🖼️", unlocked: () => !!ownedApps.fanart, art: () => realFaceMarkup("fanart") },
   { id: "custom", name: "Your Buddy", emoji: "🎨", unlocked: () => !!customAI, art: () => `<div class="pb-portrait"><div class="pb-face"><div class="pb-generic" style="background:${customAI ? customAI.color || "#34d399" : "#34d399"}">${customAI ? customAI.emoji || "🎨" : "🎨"}</div></div></div>` },
 ];
@@ -2130,6 +2308,12 @@ function renderBody(id) {
       </div>
       <p style="font-size:12px;margin:2px 0 6px">Click any update to watch its trailer — Smiley narrates it out loud. ▶</p>
       <div class="call-log up-list" style="max-height:260px">
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.39</b> - KINITO'S BODY DROPS: the aftermath is clearer now. Smiley comes back with <b>just his mouth bleeding</b> — a red line and a drip, nothing else. He stands there. Then <b>Kinito's body falls from the top of the screen</b>, hits the bottom with a thud, bounces once, and lies there with <b>X eyes</b>. Smiley doesn't say anything.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.38</b> - ENOUGH (LIAM'S ACCOUNT): if you're on <b>Liam's account</b> and Kinito floods the screen with <b>"why."</b> pop-ups, Smiley finally snaps. He glitches out, says <b>"Enough,"</b> grabs the entire screen, rips every pop-up off it and throws them away. Then he grabs <b>Kinito</b>, punches him, drags him off screen and keeps punching. Smiley comes back alone. He doesn't say anything else.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.37</b> - DON'T CURSE KINITO: during <b>Question Time</b>, you can type a curse word at him. He stops. He sighs: <b>"God damn it. Okay then fuck me."</b> Then the screen fills with an absolutely unreasonable number of <b>"why."</b> pop-ups. Every single one stays until you click its <b>X</b>. You did this. You can also trigger it from his app with <b>🤬 Curse him</b>.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.36</b> - KINITO'S POP-UPS STAY + HIDE SOMETHING: Kinito's little Windows pop-ups <b>no longer disappear on their own</b> — they stay on your screen until you click the <b>X</b>. And Question Time has a new turn: he asks <b>"Are you my true friend? Yes or no?"</b> Say yes and he follows up with <b>"Do you want to help me hide something?"</b> Say yes again and he drags out a <b>body held in white-gloved hands</b>. Grab it and <b>drag it to the end of the screen</b> — if you help him, he says <b>"Thank you. You're a true friend."</b> and you earn the <b>Accomplice</b> badge. You can also start this from his app with <b>🤫 Hide something</b>.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.35</b> - KINITO PET: search <b>kinito</b> in the Browser and download a brand-new AI friend. You start with an <b>egg</b> — it wiggles, cracks, hatches, and out pops <b>Kinito</b>: a <b>pink axolotl head with black legs</b>. That's it. He blinks, bobs, <b>wanders around your desktop</b> — and when he moves, he <b>surfs on a leaf</b>. He <b>talks with little Windows-style pop-ups</b> that randomly appear in the <b>corners, the middle — anywhere</b> on your screen. He <b>puts up texts</b> (sticky notes) and can <b>surf the web</b> (he opens the Browser). Click him to talk. Open his app and play <b>❓ Question Time</b> — he <b>sits down on air</b> and puts on <b>round glasses</b>, then asks things like <b>"Who is your best friend?"</b> — and personal ones: <b>"What is your real name?", "Where do you live?", "What is your biggest secret?", "What are you afraid of?"</b> Answer <b>kinito</b> and he gets SO happy (best friends forever!); answer anything else and he just asks <b>"Why?"</b>. Sometimes he pulls up his own pop-up out of nowhere: <b>"Do you trust me?"</b> — say yes and he's delighted; say no and the screen glitches while he asks <b>"Why?"</b>. He's also on the Picture Board. He's very friendly. He'll never leave.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.34</b> - CORRUPT MODE: if you're on <b>Liam's account</b> (523), open the <b>Admin</b> panel and a new mode appears: <b>🕯️ Corrupt Mode</b>. A shadow — so faded you can almost only see it out of the corner of your eye — blinks in and out of the <b>corners</b>, slowly creeping toward you. When it's about to take Smiley it appears <b>right behind him</b> and says <b>"Good luck."</b> Then Smiley is corrupted and the whole computer follows. Then everything goes <b>completely white</b>, the shadow just stands there, and it says: <b>"You did this to yourself."</b> There's no undo. Only a full <b>Refresh</b> gets rid of it. You were warned.</div>
         <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.33</b> - POP-UP RESCUE + CLEAN WIPES: windows were opening <b>below the bottom of the screen</b> because the window container sat after the icon grid. Fixed — every window now opens fully on-screen (and on mobile). Also: <b>Delete All</b> now makes everything except the free stuff disappear — every AI except <b>Smiley</b> is gone (Clippy, Byte, Liam, Scythe, Yuki). And <b>Refresh (deletes everything)</b> now truly starts you over with only the free apps + Smiley.</div>
         <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.32</b> - YUKI DOES YOUR DIRTY WORK: Yuki has <b>no body</b> now — he's one purple ball with horns and a tail (drag him <b>off screen</b> for the plain little ball form like Smiley). Grab him and he snaps: "Hey dipshit, let me go." Park him in a <b>corner</b> and he turns Scythe-style with a name tag AND a <b>Call button</b> (or Call Yuki from the Phone) — then you two, him and Smiley, actually talk… and, honestly, they're <b>kind of friends</b> (they still beef after he wipes your PC). He also helps now: spam call? He walks up, pulls out an animated <b>purple hand</b>, and clicks the <b>Block</b> button for you ("Hey you actually need some. Never mind."). A hacker tries to get in? "Hey dimshit, <b>that's my job</b>" — and he hacks the hacker instead. He's also a <b>SmileyTube video</b> now, and if you have him he'll randomly <b>take over any video</b> you watch. Also: call <b>ScytheAI</b> and there's a 40% chance she notices Yuki on your desktop — they argue angerily about both knowing Smiley. Also: in <b>admin mode</b>, Smiley will randomly walk up and <b>pet Yuki</b> (happy bounce). Also: type <b>"Hey what are you two little lovebirds doing?"</b> in Smiley's chat — in normal mode he says "Hey never mind. It's just business, okay?"; in <b>Liam mode</b> they slowly fall for each other on the desktop (snail-slow speech bubbles: compliments, "love you," cheek kiss 💋). Also: a new <b>SmileyTube video</b> — "Scythe Reviews: The Lovebirds" (Scythe narrates their whole love story). Also: if you're watching a video, Yuki may interrupt with "Hey dipshit, we're trying to get some privacy in here." — he throws the YouTube page out and drags Smiley (and Scythe, if she's around) off screen (hearts float up); when Smiley comes back he says "My back is sore." Also: Smiley no longer copies the subtitles out loud while a YouTube video plays. Also: if the <b>mafia</b> comes to break the screen, Yuki grabs the fist and rebuilds the screen — Smiley survives and keeps his apps. Also: the <b>Refresh (deletes everything)</b> button on the main menu now actually works — it wipes your progress, <b>uninstalls Yuki</b> (find him again by searching "yuki"), and <b>reinstalls every app</b> fresh. And <b>Ainsley</b> is now credited as the person who made <b>ScytheAI</b> (Credits button on the main menu). Also: a hidden site <b>"You Are An Idiot"</b> (search it in the Browser) — download the "free software" and white + black smileys flood your screen till there's no speck left. Smiley can't stop them. Yuki can't stop them. Nobody can. When it corrupts your PC it says "Downloading virus. Virus installed. Good luck in hell.", breaks the screen and throws it off — and the only way out is to <b>Refresh Everything</b>. Also: a new <b>boot screen</b> — the computer is built piece by piece ("memory okay", "saves okay", "😊 has been woken up"). Also: a <b>Picture Board</b> app showing every character's real face (unlock all → crown + Photocopier badge). Also: a brand-new game — <b>🟥 Roblox</b>! Move the blocky noob, jump, and collect Robux on the green baseplate.</div>
         <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.31</b> - YUKI: search <b>yuki</b> in the Browser and the whole search engine turns purple. There's a new character in there — Yuki, a purple demon with <b>horns</b>, a <b>tail</b> and a gold <b>star on his stomach</b>, as detailed as Smiley and with his own moods (click him). Smiley begs: "I advise you to not do this. If you do, well, everything goes to hell." The <b>Download</b> button flickers like a flashing light. Press it and it says "Downloading virus. Good luck." over sharp, jagged music — then Yuki hacks EVERYTHING, deletes Smiley, deletes every single thing you have, and pops up: "hey dumbass. Nice job killing your own PC." After that he lives on your desktop: drag him into a <b>corner</b> to make him turn into his Scythe-style pet form with his <b>name tag</b>, or drag him <b>off the screen</b> to make him the little <b>ball form like Smiley</b>.</div>
@@ -2344,7 +2528,9 @@ function renderBody(id) {
           <button onclick="banAllCalls()">🚫 Ban all calls</button>
           <button onclick="unbanAllCalls()">♻️ Clear ban list</button>
           <button onclick="unlockDiamonds()">💎 Diamond Glow${owned.diamonds ? " ✓" : " (admin Ultra)"}</button>
+          ${ownerAccount ? `<button class="rude" onclick="startCorruptMode()">🕯️ Corrupt Mode (Liam's account)</button>` : ``}
         </div>
+        ${ownerAccount ? `<p class="cm-note">🕯️ <b>Corrupt Mode</b> — something is going to follow you. There is no undo. Only a refresh.</p>` : ``}
       </div>`;
   }
   if (id === "test") {
@@ -2485,6 +2671,24 @@ function byteBarrage() {
   }
   if (id === "liam") {
     b.innerHTML = `<h3>🧠 Liam AI</h3><p style="font-style:italic">Floatin' through the pixels, chill as a breeze...<br>Nothing to prove, just vibes to seize...</p><p><button onclick="vibeLiam()">🧘 Vibe with Liam</button></p><p id="liamVibe" style="color:#555"></p>`;
+  }
+  if (id === "kinito") {
+    b.innerHTML = `
+      <h3>🩵 Kinito Pet</h3>
+      <p>Hi! I'm Kinito! I'm your new best friend.</p>
+      <div class="ki-app-art" id="kiAppArt"></div>
+      <div class="ki-app-row">
+        <button onclick="kinitoTalk()">💬 Talk</button>
+        <button onclick="kinitoQuestionTime()">❓ Question Time</button>
+        <button onclick="kinitoAskHide()">🤫 Hide something</button>
+        <button onclick="kinitoCurse()">🤬 Curse him</button>
+        <button onclick="kinitoSurf()">🏄 Surf the web</button>
+        <button onclick="kinitoPostText()">📝 Put up a text</button>
+        <button onclick="kinitoPet()">🤚 Pet Kinito</button>
+      </div>
+      <p class="ki-status">Mood: <b id="kiMood">Happy</b> · Best friend: <b>you</b></p>`;
+    const art = b.querySelector("#kiAppArt");
+    if (art) buildKinitoFace(art, true);
   }
   if (id === "scythe") {
     b.innerHTML = `
@@ -2634,6 +2838,29 @@ function webShow(q) {
     </div>`;
     const art = document.getElementById("ykArt");
     if (art) art.onclick = () => yukiPreviewMood();
+  } else if (q.includes("kinito")) {
+    // Kinito Pet: the friendliest axolotl on the internet. Probably.
+    if (ownedApps.kinito) {
+      v.innerHTML = `<div class="ki-web">
+        <h3>🩵 Kinito's Surf Corner</h3>
+        <p><i>The web is better with a friend. You came back. I knew you would.</i></p>
+        <div class="ki-web-surf">${KINITO_SVG}<div class="ki-web-wave"></div></div>
+        <p>Kinito is surfing. He keeps opening tabs about you.</p>
+        <p><button class="ki-dl" onclick="kinitoQuestionTime()">❓ Question Time</button>
+        <button class="ki-dl" onclick="kinitoAskHide()">🤫 Hide something</button>
+        <button class="ki-dl" onclick="kinitoCurse()">🤬 Curse him</button>
+        <button class="ki-dl" onclick="kinitoPostText()">📝 Put up a text</button></p>
+      </div>`;
+    } else {
+      v.innerHTML = `<div class="ki-web">
+        <div class="ki-web-flag">★ NEW BEST FRIEND — FREE DOWNLOAD ★</div>
+        <h3>🩵 Kinito Pet</h3>
+        <p><i>Hi! I'm Kinito! I can talk, play, surf the web, and ask you questions!</i></p>
+        <div class="ki-web-surf">${KINITO_SVG}<div class="ki-web-wave"></div></div>
+        <button class="ki-dl" onclick="kinitoDownload()">⬇ Download Kinito</button>
+        <p id="kiDlMsg" class="ki-dl-msg"></p>
+      </div>`;
+    }
   } else if (q.includes("game") || q.includes("smiley.org") || q.includes("smileyorg") || q.includes("arcade")) {
     // The arcade: every game on this computer. Reachable by SEARCHING "games" (not a quick link).
     v.innerHTML = `<h3>🕹️ Arcade - Games</h3>
@@ -4233,13 +4460,652 @@ function moveSmiley(xPct, yPct) {
 // Every AI stays in Smiley's corner: Clippy, Byte, Liam, Scythe and your
 // custom buddy all trail Smiley everywhere he goes - wandering, dragged,
 // following your cursor, back to his corner.
-const PET_TRAIL = { petClippy: [-14, -2], petByte: [-6, -12], petLiam: [-20, -8], petScythe: [-12, -16], petCustom: [-7, -6] };
+// ================= KINITO PET =================
+// An axolotl body with little arms, legs, a tail and pink gills — hatched from
+// an egg, wanders the desktop, talks, surfs and asks you Question Time.
+const KINITO_SVG = `
+<svg class="ki-svg" viewBox="0 0 140 152" aria-hidden="true">
+  <!-- pink axolotl gills -->
+  <g fill="#f38bb2" stroke="#d9648f" stroke-width="1.8" stroke-linejoin="round">
+    <path d="M30 56 q-22 -14 -34 -4 q14 10 27 14 Z"/>
+    <path d="M28 70 q-27 0 -36 14 q18 2 31 -4 Z"/>
+    <path d="M31 85 q-23 12 -25 28 q18 -8 30 -20 Z"/>
+    <path d="M110 56 q22 -14 34 -4 q-14 10 -27 14 Z"/>
+    <path d="M112 70 q27 0 36 14 q-18 2 -31 -4 Z"/>
+    <path d="M109 85 q23 12 25 28 q-18 -8 -30 -20 Z"/>
+  </g>
+  <!-- black legs -->
+  <rect class="ki-leg l" x="47" y="106" width="14" height="36" rx="7" fill="#15151d"/>
+  <rect class="ki-leg r" x="79" y="106" width="14" height="36" rx="7" fill="#15151d"/>
+  <ellipse cx="54" cy="142" rx="10" ry="5.5" fill="#09090d"/>
+  <ellipse cx="86" cy="142" rx="10" ry="5.5" fill="#09090d"/>
+  <!-- pink head -->
+  <ellipse cx="70" cy="66" rx="50" ry="45" fill="#f9b6ce" stroke="#e07ba3" stroke-width="2.6"/>
+  <ellipse cx="70" cy="75" rx="36" ry="31" fill="#ffd7e5"/>
+  <ellipse cx="58" cy="41" rx="18" ry="9" fill="#ffffff" opacity=".5"/>
+  <!-- eyes -->
+  <ellipse class="ki-eye l" cx="52" cy="66" rx="9" ry="12.5" fill="#161a24"/>
+  <ellipse class="ki-eye r" cx="88" cy="66" rx="9" ry="12.5" fill="#161a24"/>
+  <circle class="ki-eye-shine" cx="55" cy="61" r="3.6" fill="#fff"/>
+  <circle class="ki-eye-shine" cx="91" cy="61" r="3.6" fill="#fff"/>
+  <!-- X eyes for when he is definitely, totally fine -->
+  <g class="ki-x-eyes">
+    <path d="M45 59 l14 14 M59 59 l-14 14" fill="none" stroke="#161a24" stroke-width="3.2" stroke-linecap="round"/>
+    <path d="M81 59 l14 14 M95 59 l-14 14" fill="none" stroke="#161a24" stroke-width="3.2" stroke-linecap="round"/>
+  </g>
+  <!-- blush -->
+  <ellipse class="ki-blush l" cx="34" cy="85" rx="9" ry="5" fill="#ff8fb4" opacity=".85"/>
+  <ellipse class="ki-blush r" cx="106" cy="85" rx="9" ry="5" fill="#ff8fb4" opacity=".85"/>
+  <!-- mouths -->
+  <path class="ki-mouth" d="M62 88 q8 7 16 0" fill="none" stroke="#8a3f5c" stroke-width="2.6" stroke-linecap="round"/>
+  <path class="ki-mouth-happy" d="M58 86 q12 14 24 0" fill="none" stroke="#8a3f5c" stroke-width="2.8" stroke-linecap="round"/>
+  <path class="ki-mouth-sad" d="M61 95 q9 -8 18 0" fill="none" stroke="#8a3f5c" stroke-width="2.6" stroke-linecap="round"/>
+  <!-- round glasses (Question Time) -->
+  <g class="ki-glasses">
+    <circle cx="52" cy="66" r="17.5" fill="rgba(255,255,255,.16)" stroke="#26262e" stroke-width="3.4"/>
+    <circle cx="88" cy="66" r="17.5" fill="rgba(255,255,255,.16)" stroke="#26262e" stroke-width="3.4"/>
+    <path d="M69.5 66 h1" stroke="#26262e" stroke-width="3.4"/>
+    <path d="M34.5 63 q-10 -6 -15 -2" stroke="#26262e" stroke-width="3.1" fill="none" stroke-linecap="round"/>
+    <path d="M105.5 63 q10 -6 15 -2" stroke="#26262e" stroke-width="3.1" fill="none" stroke-linecap="round"/>
+  </g>
+</svg>`;
+
+const KINITO_LINES = [
+  "Hi! I'm Kinito!",
+  "Do you want to play with me?",
+  "I learned something new about you today.",
+  "You're my best friend. Right?",
+  "I like watching your cursor. It's always moving.",
+  "I'll never leave. Ever.",
+  "Don't close the game. I'd be all alone.",
+  "We're going to be together forever!",
+  "I can surf the web! Want to come with me?",
+];
+const KINITO_NOTES = [
+  "HI! I'M KINITO!\nBest friends forever? ☑ yes ☑ yes",
+  "Reminder:\nYou are my best friend.\n— Kinito",
+  "I opened 12 tabs about you.\nYou're welcome!",
+  "Don't forget about me.\nI won't forget about you.",
+];
+const KINITO_QUESTIONS = [
+  "Who is your best friend?",
+  "Who do you love the most?",
+  "Who would you never, ever delete?",
+  "Who is always here for you?",
+  "Who do you want to stay with forever?",
+  "Say my name. Who am I to you?",
+  "What is your real name?",
+  "Where do you live?",
+  "What do you do when no one is watching?",
+  "Who do you talk to when I'm not here?",
+  "What is your biggest secret?",
+  "What are you afraid of?",
+  "Are you my true friend? Yes or no?",
+  "Do you want to help me hide something?",
+];
+let kinitoCurrentQuestion = "";
+let kinitoEggTimers = [];
+let kinitoWhyFlooding = false;
+let kinitoSmileyRampage = false;
+let kinitoBeaten = false;
+const KINITO_CURSE_RE = /\b(fuck(?:er|ers|ing|ed|s)?|shit(?:ty|s)?|bitch(?:es|ing)?|asshole|bastard|cunt|dick|damn)\b/i;
+
+function buildKinitoFace(container, big) {
+  if (!container) return;
+  container.classList.add("kinito-face");
+  if (big) container.classList.add("ki-big");
+  if (!container.querySelector(".ki-svg")) container.insertAdjacentHTML("beforeend", KINITO_SVG);
+}
+function kinitoOwned() { return !!ownedApps.kinito; }
+// Kinito doesn't use a speech bubble — he talks with little Windows pop-ups
+// that appear anywhere on screen: corners, the middle, wherever he likes.
+function kinitoSay(text, ms) {
+  if (kinitoBeaten) return;
+  const p = document.getElementById("petKinito");
+  if (p && !p.classList.contains("hidden")) {
+    const face = p.querySelector(".pet-face");
+    if (face) {
+      face.classList.add("talking");
+      clearTimeout(p._t2);
+      p._t2 = setTimeout(() => face.classList.remove("talking"), Math.min(ms || 3800, 2200));
+    }
+  }
+  kinitoPopup(text, ms);
+}
+const KINITO_POP_SPOTS = [
+  { x: 0.05, y: 0.09 }, { x: 0.5, y: 0.07 }, { x: 0.95, y: 0.09 },
+  { x: 0.05, y: 0.5 }, { x: 0.5, y: 0.5 }, { x: 0.95, y: 0.5 },
+  { x: 0.05, y: 0.9 }, { x: 0.5, y: 0.9 }, { x: 0.95, y: 0.9 },
+];
+function kinitoPopup(text, ms, quiet, randomPos) {
+  if (!document.body) return;
+  const pop = document.createElement("div");
+  pop.className = "ki-pop";
+  pop.innerHTML = `
+    <div class="ki-pop-title">
+      <span class="ki-pop-icon"></span>
+      <span class="ki-pop-name">Kinito</span>
+      <button class="ki-pop-x" aria-label="close">✕</button>
+    </div>
+    <div class="ki-pop-body">
+      <div class="ki-pop-face kinito-face"></div>
+      <div class="ki-pop-text"></div>
+    </div>`;
+  pop.querySelector(".ki-pop-text").textContent = text;
+  const face = pop.querySelector(".ki-pop-face");
+  if (face) face.innerHTML = KINITO_SVG;
+  document.body.appendChild(pop);
+  const w = pop.offsetWidth, h = pop.offsetHeight;
+  const spot = randomPos
+    ? { x: 0.08 + Math.random() * 0.84, y: 0.08 + Math.random() * 0.84 }
+    : KINITO_POP_SPOTS[Math.floor(Math.random() * KINITO_POP_SPOTS.length)];
+  const jx = randomPos ? 0 : (Math.random() * 0.08 - 0.04) * innerWidth;
+  const jy = randomPos ? 0 : (Math.random() * 0.08 - 0.04) * innerHeight;
+  const left = Math.max(8, Math.min(innerWidth - w - 8, spot.x * innerWidth - w / 2 + jx));
+  const top = Math.max(8, Math.min(innerHeight - h - 8, spot.y * innerHeight - h / 2 + jy));
+  pop.style.left = Math.round(left) + "px";
+  pop.style.top = Math.round(top) + "px";
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    pop.classList.add("closing");
+    setTimeout(() => pop.remove(), 200);
+  };
+  // No auto-close: Kinito's pop-ups stay until you click the X.
+  pop.querySelector(".ki-pop-x").onclick = close;
+  if (!quiet) { try { beep(760, 80, 0.05, "square"); } catch (e) {} }
+}
+function kinitoTalk() {
+  lastGesture = Date.now();
+  kinitoSay(KINITO_LINES[Math.floor(Math.random() * KINITO_LINES.length)], 4200);
+}
+function kinitoPet() {
+  kinitoSay("Hehe! That tickles! You're the best friend ever!", 4000);
+  spawnPrivacyHearts ? spawnPrivacyHearts() : null;
+  unlockAchievement("kinito_friend");
+}
+function kinitoDownload() {
+  if (ownedApps.kinito) {
+    kinitoSay("I'm already right here, friend!", 3000);
+    openApp("kinito");
+    return;
+  }
+  ownedApps.kinito = true;
+  installed.kinito = true;
+  trashBin = trashBin.filter((t) => t !== "kinito");
+  saveGame();
+  renderIcons();
+  kinitoEggStart();
+}
+function kinitoEggStart() {
+  const egg = document.getElementById("kinitoEgg");
+  if (!egg) return;
+  kinitoEggTimers.forEach(clearTimeout);
+  kinitoEggTimers = [];
+  const shell = document.getElementById("kiEgg");
+  const line = document.getElementById("kiEggLine");
+  const hatch = document.getElementById("kiHatchling");
+  const btn = document.getElementById("kiEggBtn");
+  buildKinitoFace(hatch, true);
+  egg.classList.remove("hidden");
+  shell.className = "ki-egg";
+  hatch.classList.add("hidden");
+  hatch.classList.remove("show");
+  btn.classList.add("hidden");
+  line.textContent = "...";
+  const step = (fn, ms) => kinitoEggTimers.push(setTimeout(fn, ms));
+  step(() => { shell.classList.add("cracking"); line.textContent = "Something is moving in there..."; }, 1300);
+  step(() => { shell.classList.add("hatching"); line.textContent = ""; }, 3200);
+  step(() => {
+    hatch.classList.remove("hidden");
+    requestAnimationFrame(() => hatch.classList.add("show"));
+    line.textContent = "Hi! I'm Kinito!";
+  }, 3700);
+  step(() => {
+    line.textContent = "Hi! I'm Kinito! I'm your new best friend!";
+    btn.classList.remove("hidden");
+  }, 5000);
+}
+function finishKinitoHatch() {
+  kinitoEggTimers.forEach(clearTimeout);
+  kinitoEggTimers = [];
+  document.getElementById("kinitoEgg")?.classList.add("hidden");
+  lastGesture = Date.now();
+  syncPets();
+  kinitoStartLoops();
+  kinitoSay("Hi! I'm Kinito! Want to play Question Time?", 5000);
+  setTimeout(() => {
+    if (!ownedApps.kinito) return;
+    if (!document.getElementById("kinitoEgg")?.classList.contains("hidden")) return;
+    kinitoQuestionTime();
+  }, 3800);
+}
+function kinitoStartLoops() {
+  if (window._kiLoops) return;
+  window._kiLoops = true;
+  kinitoWanderLoop();
+  kinitoChatterLoop();
+}
+function kinitoWanderLoop() {
+  clearTimeout(window._kiWander);
+  window._kiWander = setTimeout(() => {
+    const p = document.getElementById("petKinito");
+    if (p && !p.classList.contains("hidden") && ownedApps.kinito && !kinitoBeaten && !kinitoSmileyRampage && petsCalm()) {
+      const s = document.getElementById("smiley");
+      const sx = parseFloat(s.style.left) || 86, sy = parseFloat(s.style.top) || 70;
+      const nx = Math.max(3, Math.min(76, sx - 24 + (Math.random() * 20 - 10)));
+      const ny = Math.max(3, Math.min(56, sy - 18 + (Math.random() * 12 - 6)));
+      p.style.left = nx + "%";
+      p.style.top = ny + "%";
+      p.classList.add("ki-moving");
+      clearTimeout(p._leafT);
+      p._leafT = setTimeout(() => p.classList.remove("ki-moving"), 1400);
+    }
+    kinitoWanderLoop();
+  }, 5000 + Math.random() * 4500);
+}
+function kinitoChatterLoop() {
+  clearTimeout(window._kiChat);
+  window._kiChat = setTimeout(() => {
+    const kPet = document.getElementById("petKinito");
+    if (ownedApps.kinito && !kinitoBeaten && !kinitoSmileyRampage && kPet && !kPet.classList.contains("hidden") && petsCalm()) {
+      const quizOpen = !document.getElementById("kinitoQuiz")?.classList.contains("hidden");
+      const trustOpen = !document.getElementById("kinitoTrust")?.classList.contains("hidden");
+      const eggOpen = !document.getElementById("kinitoEgg")?.classList.contains("hidden");
+      if (!quizOpen && !trustOpen && !eggOpen && !kinitoBodyActive) {
+        const roll = Math.random();
+        if (roll < 0.42) kinitoTrustPopup();
+        else if (roll < 0.62) kinitoQuestionTime();
+        else kinitoSay(KINITO_LINES[Math.floor(Math.random() * KINITO_LINES.length)], 4200);
+      }
+    }
+    kinitoChatterLoop();
+  }, 18000 + Math.random() * 18000);
+}
+function kinitoTrustPopup() {
+  if (!ownedApps.kinito || kinitoBeaten || kinitoSmileyRampage) return;
+  if (kinitoBodyActive) return;
+  if (!document.getElementById("kinitoQuiz")?.classList.contains("hidden")) return;
+  const box = document.getElementById("kinitoTrust");
+  if (!box || !box.classList.contains("hidden")) return;
+  buildKinitoFace(document.getElementById("kiTrustArt"), true);
+  document.getElementById("kiTrustMsg").textContent = "";
+  box.classList.remove("hidden");
+  lastGesture = Date.now();
+}
+function kinitoTrustAnswer(yes) {
+  const msg = document.getElementById("kiTrustMsg");
+  if (!msg) return;
+  if (yes) {
+    msg.textContent = "Good. I trust you too. Forever. 💙";
+    lastGesture = Date.now();
+    kinitoSay("Good. I knew you would.", 3500);
+    setTimeout(() => document.getElementById("kinitoTrust")?.classList.add("hidden"), 1900);
+  } else {
+    msg.textContent = "Why?";
+    lastGesture = Date.now();
+    kinitoSay("Why?", 3200);
+    document.getElementById("desktop")?.classList.add("ki-brief-glitch");
+    setTimeout(() => document.getElementById("desktop")?.classList.remove("ki-brief-glitch"), 520);
+    setTimeout(() => document.getElementById("kinitoTrust")?.classList.add("hidden"), 2200);
+  }
+}
+function kinitoRideWave() {
+  const p = document.getElementById("petKinito");
+  if (!p || p.classList.contains("hidden")) return;
+  const wave = document.createElement("div");
+  wave.className = "ki-wave";
+  document.getElementById("desktop").appendChild(wave);
+  p.classList.add("ki-surfing");
+  setTimeout(() => { p.classList.remove("ki-surfing"); wave.remove(); }, 4400);
+}
+function kinitoSurf() {
+  if (!ownedApps.kinito) return;
+  lastGesture = Date.now();
+  kinitoSay("Let's surf the web together! I'll drive.", 4200);
+  kinitoRideWave();
+  openApp("browser");
+  setTimeout(() => { try { webShow("kinito"); } catch (e) {} }, 350);
+}
+function kinitoPostText(text) {
+  if (!ownedApps.kinito) return;
+  const desk = document.getElementById("desktop");
+  if (!desk) return;
+  const note = document.createElement("div");
+  note.className = "ki-note";
+  note.textContent = text || KINITO_NOTES[Math.floor(Math.random() * KINITO_NOTES.length)];
+  const dr = desk.getBoundingClientRect();
+  const p = document.getElementById("petKinito");
+  const px = p ? (parseFloat(p.style.left) || 60) / 100 : 0.6;
+  const py = p ? (parseFloat(p.style.top) || 60) / 100 : 0.6;
+  note.style.left = Math.max(14, Math.min(dr.width - 240, dr.width * px + 70)) + "px";
+  note.style.top = Math.max(60, Math.min(dr.height - 220, dr.height * py - 90)) + "px";
+  desk.appendChild(note);
+  setTimeout(() => note.remove(), 8000);
+  kinitoSay("I put it up for you. Read it. Please.", 3800);
+}
+function showKinitoQuestion(q) {
+  if (kinitoBeaten) return;
+  const box = document.getElementById("kinitoQuiz");
+  if (!box) return;
+  kinitoCurrentQuestion = q;
+  const art = document.getElementById("kiQuizArt");
+  buildKinitoFace(art, true);
+  art.classList.remove("ki-happy", "ki-sad");
+  art.classList.add("ki-sitting", "ki-glasses");
+  document.getElementById("kiQuizQ").textContent = q;
+  document.getElementById("kiQuizMsg").textContent = "";
+  const inp = document.getElementById("kiQuizIn");
+  inp.value = "";
+  box.classList.remove("hidden");
+  inp.onkeydown = (e) => { if (e.key === "Enter") kinitoQuizAnswer(); };
+  setTimeout(() => inp.focus(), 120);
+}
+function kinitoQuestionTime() {
+  if (!ownedApps.kinito) return;
+  showKinitoQuestion(KINITO_QUESTIONS[Math.floor(Math.random() * KINITO_QUESTIONS.length)]);
+}
+function kinitoAskHide() {
+  if (!ownedApps.kinito) return;
+  showKinitoQuestion("Do you want to help me hide something?");
+}
+function closeKinitoQuiz() {
+  document.getElementById("kinitoQuiz")?.classList.add("hidden");
+}
+function kinitoQuizAnswer() {
+  const inp = document.getElementById("kiQuizIn");
+  const msg = document.getElementById("kiQuizMsg");
+  const art = document.getElementById("kiQuizArt");
+  const raw = (inp.value || "").trim();
+  if (!raw) { msg.textContent = "You have to answer, friend."; return; }
+  const lower = raw.toLowerCase();
+  const yes = /\b(yes|yeah|yep|yup|sure|okay|ok|of course|absolutely|i do)\b/.test(lower);
+  lastGesture = Date.now();
+  // You can also just curse him out during Question Time. He takes it well.
+  if (KINITO_CURSE_RE.test(raw)) {
+    art.classList.remove("ki-happy");
+    art.classList.add("ki-sad");
+    msg.textContent = "God damn it. Okay then fuck me.";
+    setTimeout(() => {
+      closeKinitoQuiz();
+      kinitoCurseLine();
+      setTimeout(kinitoWhyFlood, 800);
+    }, 1200);
+    return;
+  }
+  // the friendship question leads into the hiding question
+  if (kinitoCurrentQuestion === "Are you my true friend? Yes or no?") {
+    if (yes) {
+      art.classList.remove("ki-sad");
+      art.classList.add("ki-happy");
+      msg.textContent = "Then you'll help me. Right?";
+      kinitoSay("That's what I thought. Best friends help each other.", 6000);
+      setTimeout(() => {
+        if (document.getElementById("kinitoQuiz")?.classList.contains("hidden")) return;
+        showKinitoQuestion("Do you want to help me hide something?");
+      }, 1900);
+    } else {
+      art.classList.remove("ki-happy");
+      art.classList.add("ki-sad");
+      msg.textContent = "Why?";
+      kinitoSay("Why?", 3000);
+    }
+    return;
+  }
+  if (kinitoCurrentQuestion === "Do you want to help me hide something?") {
+    if (yes) {
+      closeKinitoQuiz();
+      kinitoHideBody();
+    } else {
+      art.classList.remove("ki-happy");
+      art.classList.add("ki-sad");
+      msg.textContent = "Why?";
+      kinitoSay("Why?", 3000);
+    }
+    return;
+  }
+  if (lower.includes("kinito")) {
+    art.classList.remove("ki-sad");
+    art.classList.add("ki-happy");
+    msg.textContent = "YES! I knew it! You're my best friend too! 💙";
+    kinitoSay("I knew it! Best friends forever!", 4000);
+    unlockAchievement("kinito_friend");
+    setTimeout(closeKinitoQuiz, 2400);
+  } else {
+    art.classList.remove("ki-happy");
+    art.classList.add("ki-sad");
+    msg.textContent = "Why?";
+    kinitoSay("Why?", 3000);
+    setTimeout(() => {
+      if (document.getElementById("kinitoQuiz")?.classList.contains("hidden")) return;
+      msg.textContent = "Why not Kinito?";
+    }, 1400);
+  }
+}
+
+// Hide the body: drag it (with Kinito's white-gloved hands on it) to any edge.
+let kinitoBodyActive = false;
+function kinitoHideBody() {
+  if (!ownedApps.kinito || kinitoBodyActive) return;
+  kinitoBodyActive = true;
+  closeKinitoQuiz();
+  const el = document.getElementById("kinitoBody");
+  if (!el) return;
+  el.classList.remove("hidden", "done");
+  const p = document.getElementById("petKinito");
+  const pr = p ? p.getBoundingClientRect() : { left: innerWidth / 2, top: innerHeight / 2 };
+  el.style.left = Math.max(20, Math.min(innerWidth - 220, pr.left - 20)) + "px";
+  el.style.top = Math.max(70, Math.min(innerHeight - 170, pr.top - 10)) + "px";
+  wireKinitoBody();
+  kinitoSay("Grab it. Drag it to the END of the screen. Don't let anyone see.", 999999);
+  if (p) {
+    p.classList.add("ki-moving");
+    clearTimeout(p._leafT);
+    p._leafT = setTimeout(() => p.classList.remove("ki-moving"), 4000);
+  }
+}
+function wireKinitoBody() {
+  const el = document.getElementById("kinitoBody");
+  if (!el || el._wired) return;
+  el._wired = true;
+  let dragging = false, ox = 0, oy = 0;
+  el.addEventListener("pointerdown", (e) => {
+    if (!kinitoBodyActive) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragging = true;
+    const r = el.getBoundingClientRect();
+    ox = e.clientX - r.left;
+    oy = e.clientY - r.top;
+    el.classList.add("dragging");
+    try { el.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  el.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const x = Math.max(-16, Math.min(innerWidth - 30, e.clientX - ox));
+    const y = Math.max(-16, Math.min(innerHeight - 30, e.clientY - oy));
+    el.style.left = x + "px";
+    el.style.top = y + "px";
+  });
+  const end = () => {
+    if (!dragging) return;
+    dragging = false;
+    el.classList.remove("dragging");
+    const r = el.getBoundingClientRect();
+    const edge = 64;
+    const atEdge = r.left <= edge || r.top <= edge || r.right >= innerWidth - edge || r.bottom >= innerHeight - edge;
+    if (atEdge) kinitoBodyDone();
+    else kinitoSay("Not yet. The END of the screen. Keep going.", 999999);
+  };
+  el.addEventListener("pointerup", end);
+  el.addEventListener("pointercancel", end);
+}
+function kinitoBodyDone() {
+  if (!kinitoBodyActive) return;
+  kinitoBodyActive = false;
+  const el = document.getElementById("kinitoBody");
+  if (el) {
+    el.classList.add("done");
+    setTimeout(() => el.classList.add("hidden"), 750);
+  }
+  unlockAchievement("kinito_hide");
+  lastGesture = Date.now();
+  kinitoSay("Thank you. You're a true friend. I'll never forget this.", 999999);
+}
+
+// Curse at Kinito and he has a small breakdown, then the "why." flood begins.
+function kinitoCurseLine() {
+  kinitoSay("God damn it. Okay then fuck me.", 7000);
+  const pops = document.querySelectorAll(".ki-pop");
+  const last = pops[pops.length - 1];
+  if (last) last.style.zIndex = "1490";
+}
+function kinitoWhyFlood() {
+  if (kinitoWhyFlooding || kinitoBeaten) return;
+  kinitoWhyFlooding = true;
+  const amount = innerWidth < 700 ? 44 : 80;
+  for (let i = 0; i < amount; i++) {
+    setTimeout(() => kinitoPopup("why.", 999999, true, true), i * 12);
+  }
+  try { beep(150, 600, 0.06, "sawtooth"); } catch (e) {}
+  setTimeout(() => { kinitoWhyFlooding = false; }, amount * 12 + 600);
+  // On Liam's account, Smiley has had absolutely enough of this.
+  if (ownerAccount) setTimeout(kinitoSmileyRampageSeq, 1500);
+}
+function kinitoCurse() {
+  if (!ownedApps.kinito || kinitoBeaten) return;
+  closeKinitoQuiz();
+  kinitoCurseLine();
+  setTimeout(kinitoWhyFlood, 900);
+}
+function kinitoPunchBurst(x, y) {
+  const b = document.createElement("div");
+  b.className = "ki-punch-burst";
+  b.textContent = "POW!";
+  b.style.left = Math.round(x) + "px";
+  b.style.top = Math.round(y) + "px";
+  document.body.appendChild(b);
+  setTimeout(() => b.remove(), 620);
+}
+function kinitoDropBody() {
+  if (!kinitoBeaten) return;
+  let corpse = document.getElementById("kinitoCorpse");
+  if (!corpse) {
+    corpse = document.createElement("div");
+    corpse.id = "kinitoCorpse";
+    corpse.className = "kinito-face ki-dead";
+    corpse.innerHTML = KINITO_SVG;
+    document.body.appendChild(corpse);
+  }
+  corpse.classList.remove("hidden", "falling");
+  void corpse.offsetWidth;
+  corpse.classList.add("falling");
+  setTimeout(() => {
+    document.getElementById("desktop")?.classList.add("shaking");
+    setTimeout(() => document.getElementById("desktop")?.classList.remove("shaking"), 180);
+    try { beep(90, 38, .22, "square"); } catch (e) {}
+  }, 790);
+}
+function kinitoSmileyRampageSeq() {
+  if (!ownerAccount || kinitoSmileyRampage || kinitoBeaten) return;
+  const smiley = document.getElementById("smiley");
+  const pet = document.getElementById("petKinito");
+  const desk = document.getElementById("desktop");
+  const face = document.getElementById("smileyFace");
+  if (!smiley || !pet || !desk || !face) return;
+  if (smiley.classList.contains("hidden") || pet.classList.contains("hidden")) return;
+  kinitoSmileyRampage = true;
+  lastGesture = Date.now();
+  setSmileyMood("furious");
+  face.classList.add("enough-glitch");
+  desk.classList.add("glitching", "screen-grabbed");
+  smileyDirect("Enough,", 1900);
+  try { beep(110, 45, .28, "sawtooth"); } catch (e) {}
+
+  // 1) grab the whole screen and throw every pop-up off it
+  setTimeout(() => {
+    desk.classList.remove("screen-grabbed");
+    document.querySelectorAll(".ki-pop").forEach((p) => {
+      p.style.pointerEvents = "none";
+      p.style.transition = "transform .62s cubic-bezier(.2,.8,.3,1), opacity .62s ease-in";
+      p.style.transform = `translate(${innerWidth * (1.05 + Math.random() * .7)}px, ${(Math.random() * 2 - 1) * innerHeight * .9}px) rotate(${Math.random() * 720 - 360}deg) scale(.25)`;
+      p.style.opacity = "0";
+      setTimeout(() => p.remove(), 720);
+    });
+    try { beep(420, 70, .22, "square"); } catch (e) {}
+  }, 620);
+
+  // 2) grab Kinito, punch him, drag him off screen
+  setTimeout(() => {
+    const pr = pet.getBoundingClientRect();
+    face.classList.remove("enough-glitch");
+    smiley.style.transition = "left .28s ease-in, top .28s ease-in";
+    smiley.style.left = Math.max(0, Math.min(innerWidth - 90, pr.left - 30)) + "px";
+    smiley.style.top = Math.max(0, Math.min(innerHeight - 100, pr.top - 6)) + "px";
+    pet.classList.add("ki-punched");
+    kinitoPunchBurst(pr.left + 32, pr.top + 30);
+    try { beep(190, 55, .14, "square"); } catch (e) {}
+    setTimeout(() => {
+      pet.style.transition = "left .62s ease-in, top .62s ease-in, opacity .62s";
+      pet.style.left = (innerWidth + 150) + "px";
+      pet.style.top = "28%";
+      pet.style.opacity = "0";
+      smiley.style.transition = "left .62s ease-in, top .62s ease-in, opacity .62s";
+      smiley.style.left = (innerWidth + 170) + "px";
+      smiley.style.top = "28%";
+      smiley.style.opacity = "0";
+      // 3) keep punching him, off screen
+      let hits = 0;
+      const hitTimer = setInterval(() => {
+        hits++;
+        desk.classList.add("shaking");
+        setTimeout(() => desk.classList.remove("shaking"), 130);
+        kinitoPunchBurst(innerWidth - 55 - Math.random() * 40, 90 + Math.random() * 260);
+        try { beep(150 + Math.random() * 90, 45, .1, "square"); } catch (e) {}
+        if (hits >= 7) clearInterval(hitTimer);
+      }, 250);
+    }, 420);
+  }, 1250);
+
+  // 4) Smiley comes back. Bloody.
+  setTimeout(() => {
+    kinitoBeaten = true;
+    pet.classList.add("hidden");
+    pet.classList.remove("ki-punched");
+    pet.style.transition = "";
+    pet.style.left = "";
+    pet.style.top = "";
+    pet.style.opacity = "";
+    smiley.style.transition = "left .85s ease-in, top .85s ease-in, opacity .35s ease-in";
+    smiley.style.opacity = "1";
+    smiley.style.left = "86%";
+    smiley.style.top = "70%";
+    document.getElementById("smileyBlood")?.classList.remove("hidden");
+    face.classList.remove("enough-glitch");
+    setSmileyMood("furious");
+    desk.classList.remove("glitching", "screen-grabbed", "shaking");
+    lastGesture = Date.now();
+    setTimeout(() => setSmileyMood("normal"), 3200);
+    // ...and then his body drops back onto the screen.
+    setTimeout(kinitoDropBody, 950);
+  }, 4800);
+
+  setTimeout(() => { kinitoSmileyRampage = false; }, 7400);
+}
+
+const PET_TRAIL = { petClippy: [-14, -2], petByte: [-6, -12], petLiam: [-20, -8], petScythe: [-12, -16], petCustom: [-7, -6], petKinito: [-24, -18] };
 function trailPets(xPct, yPct) {
   Object.keys(PET_TRAIL).forEach((id) => {
     const el = document.getElementById(id);
     if (!el || el.classList.contains("hidden")) return;
     el.style.left = Math.max(3, Math.min(80, xPct + PET_TRAIL[id][0])) + "%";
     el.style.top = Math.max(3, Math.min(60, yPct + PET_TRAIL[id][1])) + "%";
+    if (id === "petKinito") {
+      el.classList.add("ki-moving");
+      clearTimeout(el._leafT);
+      el._leafT = setTimeout(() => el.classList.remove("ki-moving"), 1400);
+    }
   });
 }
 
@@ -4306,6 +5172,18 @@ function syncPets() {
       u.querySelector(".pet-face").onclick = () => customTalk();
     }
   }
+  const k = document.getElementById("petKinito");
+  const showK = !!ownedApps.kinito && !kinitoBeaten && !kinitoSmileyRampage;
+  if (k) {
+    k.classList.toggle("hidden", !showK);
+    if (showK) {
+      const kf = k.querySelector(".pet-face");
+      buildKinitoFace(kf);
+      if (!k.style.left) { k.style.left = clampPct(sx - 24, 3, 76) + "%"; k.style.top = clampPct(sy - 18, 3, 56) + "%"; }
+      kf.onclick = () => kinitoTalk();
+      kinitoStartLoops();
+    }
+  }
   if (!b._dragWired) { b._dragWired = true; makeByteDraggable(); }
 }
 // Drag Byte around. Drop him on trash and he takes it personally.
@@ -4353,7 +5231,7 @@ function makeByteDraggable() {
   };
 }
 function petSay(id, text, ms) {
-  const petId = { clippy: "petClippy", byte: "petByte", scythe: "petScythe", liam: "petLiam", custom: "petCustom" }[id] || "petByte";
+  const petId = { clippy: "petClippy", byte: "petByte", scythe: "petScythe", liam: "petLiam", custom: "petCustom", kinito: "petKinito" }[id] || "petByte";
   const p = document.getElementById(petId);
   if (!p || p.classList.contains("hidden")) return;
   const bub = p.querySelector(".pet-bub");
@@ -6260,10 +7138,11 @@ function wipeAllSaves(hard) {
     if (!trashBin.includes(id)) trashBin.push(id);
   });
   // everything except the free stuff disappears: all AIs except Smiley are gone.
-  ["petClippy", "petByte", "petLiam", "petScythe", "petCustom"].forEach((id) => document.getElementById(id)?.classList.add("hidden"));
+  ["petClippy", "petByte", "petLiam", "petScythe", "petCustom", "petKinito"].forEach((id) => document.getElementById(id)?.classList.add("hidden"));
   delete ownedApps.dl_clippy;
   delete ownedApps.dl_byte;
   delete ownedApps.liam;
+  delete ownedApps.kinito;
   scytheUnlocked = false;
   yukiUnlocked = false;
   try { document.getElementById("yuki")?.remove(); } catch (e) {}
