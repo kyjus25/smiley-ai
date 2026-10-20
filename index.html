@@ -4,9 +4,33 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Smiley AI</title>
-<link rel="stylesheet" href="style.css?v=129" />
+<link rel="stylesheet" href="style.css?v=171" />
 </head>
 <body>
+
+<!-- BOOTING UP: classic CRT boot screen with typed lines and a filling box -->
+<div id="bootingUp" class="hidden">
+  <div class="bootup-crt">
+    <div class="bootup-screen">
+      <pre class="bootup-logo">    _______________
+   /               \\
+  |   .---.  .---.  |
+  |   | O |  | O |  |
+  |   '---'  '---'  |
+  |      .-----.     |
+  |      '-----'     |
+   \\_______________/</pre>
+      <div class="bootup-title">SMILEY OS &nbsp;v2.32</div>
+      <div class="bootup-log" id="bootUpLog"></div>
+      <div class="bootup-bar-wrap">
+        <div class="bootup-bar" id="bootUpFill"></div>
+      </div>
+      <div class="bootup-status" id="bootUpStatus">Starting... <span class="bootup-cursor">█</span></div>
+    </div>
+    <div class="bootup-scanlines"></div>
+    <div class="bootup-glow"></div>
+  </div>
+</div>
 
 <!-- BOOT SCREEN - Windows-style booting with settings on the loading screen -->
 <div id="boot">
@@ -35,10 +59,10 @@
     </div>
     <p>Welcome to your computer.<br>Open apps, play games, hang out with Smiley.</p>
     <div>
-      <button id="powerBtn">▶ Boot Desktop</button>
+      <button id="powerBtn">▶ Menu</button>
       <button onclick="toggleFullscreen()">⛶ Fullscreen</button>
       <button onclick="openCredits()">👑 Credits</button>
-      <button onclick="location.reload()">⟳ Refresh (deletes everything)</button>
+      <button onclick="refreshGame()">⟳ Refresh (deletes everything)</button>
     </div>
   </div>
 </div>
@@ -211,7 +235,7 @@
     <div class="hack-panel-box">
       <h3>SMILEY.EXE</h3>
       <p>Taking over...</p>
-      <button id="deleteAllBtn">Delete All</button>
+      <button id="deleteAllBtn" onclick="manualDeleteAll()">Delete All</button>
     </div>
   </div>
   <div id="boomScreen" class="hidden">
@@ -291,6 +315,35 @@
     <div class="go-bar"><span id="goTitle">🎮</span><button onclick="closeGameOverlay()">✕ Close</button></div>
     <div id="gameStage" class="go-stage"></div>
   </div>
+  <!-- YUKI CALL: Smiley and Yuki on the line. They beef, but they're kind of friends. -->
+  <div id="yukiCall" class="hidden">
+    <div class="yuki-call-box">
+      <h3>🔮 Yuki &amp; 🙂 Smiley — on the line</h3>
+      <div id="yukiCallLog" class="call-log"></div>
+      <div class="yuki-call-ctl">
+        <button onclick="yukiCallMore()">💬 Next</button>
+        <button onclick="hangUpYuki()">📴 Hang up</button>
+      </div>
+    </div>
+  </div>
+  <!-- YUKI: the purple demon that hacks everything (search "yuki" in the Browser) -->
+  <div id="yukiTakeover" class="hidden">
+    <div class="yk-takeover-box">
+      <div class="yk-tk-art" id="ykTkArt"></div>
+      <div id="ykTkType" class="yk-tk-type"></div>
+      <button id="ykReboot" class="hidden" onclick="rebootFromYuki()">[ Reboot ]</button>
+    </div>
+  </div>
+  <!-- YOU ARE AN IDIOT: virus crash. No reboot — only a full Refresh can save you. -->
+  <div id="idiotCrash" class="hidden">
+    <div class="idiot-crash-box">
+      <div class="idiot-crash-logo">💀</div>
+      <h2>SYSTEM DESTROYED</h2>
+      <p>Downloading virus.<br>Virus installed.<br><b>Good luck in hell.</b></p>
+      <p style="color:#ff8080">You can't reboot. The only way out is to refresh EVERYTHING.</p>
+      <button onclick="refreshGame()">⟳ Refresh Everything</button>
+    </div>
+  </div>
   <!-- Corrupted PC screen (answered spam without Ultra/Admin) -->
   <div id="corruptScreen" class="hidden">
     <div class="bsod-box">
@@ -344,6 +397,7 @@
     <button data-app="firewall">🧱 Firewall</button>
     <button data-app="updates">📋 Updates</button>
     <button data-app="achievements">🏆 Achievements</button>
+    <button data-app="pictureboard">🖼️ Picture Board</button>
     <button data-app="fanart">🖼️ Fan Art</button>
     <button data-app="smiley">🙂 Smiley AI</button>
     <button data-app="settings">⚙️ Settings</button>
@@ -367,7 +421,7 @@
     <hr class="credits-hr">
     <div class="credits-team">
       <div>👑 <b>Liam</b> — the owner</div>
-      <div>🎨 <b>Ainsley</b> — the helper</div>
+      <div>🎨 <b>Ainsley</b> — the helper who made ScytheAI</div>
       <div>✨ <b>J</b> — the helper</div>
       <hr class="credits-hr">
       <div>🤖 <b>DeepSeek</b> — the AI that helped build it</div>
@@ -377,6 +431,6 @@
   </div>
 </div>
 
-<script src="script.js?v=129"></script>
+<script src="script.js?v=171"></script>
 </body>
 </html>

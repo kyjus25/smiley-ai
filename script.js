@@ -36,14 +36,50 @@ function markHacked() { try { localStorage.setItem("smileyAI-hacked", "1"); } ca
 })();
 
 document.getElementById("powerBtn").onclick = () => {
+  // show the "booting up" loading screen first
+  const bs = document.getElementById("bootingUp");
+  if (bs) bs.classList.remove("hidden");
   document.getElementById("boot").classList.add("hidden");
-  document.getElementById("desktop").classList.remove("hidden");
-  startTime = Date.now();
-  renderIcons();
-  openApp("games"); // free starter app so new players can earn cash
-  initSmiley(); // wake up the Smiley AI desktop pet (role greeting inside)
-  unlockAchievement("boot");
-  termPrint("Type HELP and press Enter.");
+  const fill = document.getElementById("bootUpFill");
+  const log = document.getElementById("bootUpLog");
+  const status = document.getElementById("bootUpStatus");
+  if (log) log.innerHTML = "";
+  // the computer being built, piece by piece
+  const steps = [
+    ["Checking memory", "memory okay"],
+    ["Loading saves", "saves okay"],
+    ["Starting apps", "apps okay"],
+    ["Building the desktop", "desktop okay"],
+    ["Waking up Smiley", "\u{1f60a} has been woken up"],
+    ["All systems go", "ready"],
+  ];
+  let i = 0;
+  const tick = () => {
+    if (i >= steps.length) {
+      if (status) status.textContent = "Starting... ";
+      setTimeout(() => {
+        if (bs) bs.classList.add("hidden");
+        document.getElementById("desktop").classList.remove("hidden");
+        startTime = Date.now();
+        renderIcons();
+        openApp("games"); // free starter app so new players can earn cash
+        initSmiley(); // wake up the Smiley AI desktop pet (role greeting inside)
+        unlockAchievement("boot");
+        termPrint("Type HELP and press Enter.");
+      }, 850);
+      return;
+    }
+    const [label, result] = steps[i];
+    const ln = document.createElement("div");
+    ln.className = "ln";
+    ln.innerHTML = `<span class="ok">✓</span> ${label} <span class="dots">${".".repeat(Math.max(1, 18 - label.length))}</span> <b class="ok">${result}</b>`;
+    if (log) log.appendChild(ln);
+    if (fill) fill.style.width = Math.min(100, ((i + 1) / steps.length) * 100) + "%";
+    if (status) status.textContent = label + " ...";
+    i++;
+    setTimeout(tick, 780);
+  };
+  tick();
 };
 
 // Settings: Smiley detail level (low = plain ball, ultra = cooler, locked in shop).
@@ -76,6 +112,29 @@ function applySmileyDetail(level, silent) {
     if (level === "normal") { setSmileyMood("happy"); if (!mute) smileySay("Cute mode back on!", 2500); }
     if (level === "ultra") { setSmileyMood("cool"); smileyGesture("thumbsup"); if (!mute) smileySay("ULTRA! Every pixel detailed - me, files, windows, ALL of it!", 3000); }
   }
+  // Buying Ultra unlocks the secret: Retro Frame Retro Theme.
+  if (level === "ultra" && granted && !retroMode) {
+    retroMode = true;
+    applyRetroTheme();
+    if (!mute) setTimeout(() => smileySay("Secret unlocked: RETRO FRAME RETRO THEME! Everything is 8-bit now!", 5000), 800);
+  }
+  if (openWins["settings"]) renderBody("settings");
+}
+
+// --- Secret: Retro Frame Retro Theme (unlocked by Ultra) ---
+function applyRetroTheme() {
+  document.body.classList.toggle("retro", !!retroMode);
+  const d = document.getElementById("desktop");
+  if (d) d.classList.toggle("retro", !!retroMode);
+}
+function toggleRetroTheme() {
+  if (!owned.ultra && !isAdmin) { smileySay("Buy Ultra first to unlock the secret Retro theme!", 3000); return; }
+  retroMode = !retroMode;
+  applyRetroTheme();
+  saveGame();
+  if (retroMode) { setSmileyMood("cool"); smileySay("Retro Frame Retro Theme: ON! Boop boop.", 3000); }
+  else smileySay("Retro theme off. Back to the future.", 2500);
+  if (openWins["settings"]) renderBody("settings");
 }
 
 // --- Clock ---
@@ -103,6 +162,7 @@ const APPS = [
   { id: "updates", name: "Updates", emoji: "📋", price: 0 },
   { id: "achievements", name: "Achievements", emoji: "🏆", price: 0 },
   { id: "fanart", name: "Fan Art", emoji: "🖼️", price: 5 },
+  { id: "pictureboard", name: "Picture Board", emoji: "🖼️", price: 0 },
   { id: "test", name: "Test Room", emoji: "🧪", price: 0 },
   { id: "dl_clippy", name: "ClippyPlus", emoji: "📎", price: 60 },
   { id: "dl_byte", name: "ByteBuddy", emoji: "🤖", price: 80 },
@@ -112,6 +172,13 @@ const APPS = [
   { id: "scythe", name: "Scythe AI", emoji: "🤠", price: 0 },
 ];
 let scytheUnlocked = false; // only appears after rescuing the aftermath note
+// Yuki: the purple demon you find by searching "yuki" in the Browser. Horns, a tail,
+// and a download button that should NOT be pressed.
+let yukiUnlocked = false; // true once the download finished and he got loose
+let yukiForm = "demon"; // "demon" (full body) | "corner" (Scythe-style pet + name tag) | "ball" (little ball like Smiley)
+let yukiHacked = false; // true after he killed the PC once (survives refresh)
+let yukiBusy = false; // a download / hack animation is running
+let yukiActive = false; // true while Yuki is taking over the whole PC (blocks other Yuki reactions)
 let updateSuggestions = []; // user-submitted future update ideas (admin views them)
 let bannedCallers = new Set(); // callers you banned for good
 let customAI = null; // your Build-Your-Buddy: {name, emoji, color, vibe}
@@ -143,14 +210,17 @@ const ACHIEVEMENTS = [
   { id: "paint", name: "Artist", icon: "🎨", desc: "Paint something." },
   { id: "read_updates", name: "Up To Date", icon: "📋", desc: "Read the Update Board." },
   { id: "creator", name: "Smiley's Creator", icon: "👑", desc: "In Admin mode, tell the Phone scammer 523 to get owner permissions on Liam's account." },
+  { id: "yuki", name: "Nice Job, Dumbass", icon: "🔮", desc: "Search \"yuki\", press the flickering Download button, and let him kill your whole PC." },
+  { id: "photocopier", name: "Photocopier", icon: "📸", desc: "Unlock EVERY character and the Picture Board crown will pop." },
 ];
 let unlockedAchievements = new Set();
 let ownerAccount = false; // true after the 523 owner code: you're on Liam's account with owner perms
 // App ownership: only installer/settings/files/games are free. Everything else costs fake cash.
-let ownedApps = { installer: true, settings: true, files: true, games: true, terminal: true, phone: true, firewall: true, updates: true, achievements: true, smiley: true, test: true };
+let ownedApps = { installer: true, settings: true, files: true, games: true, terminal: true, phone: true, firewall: true, updates: true, achievements: true, smiley: true, test: true, pictureboard: true };
 let devMode = false; // developer mode (admin + ultra): everything free + test room
 let mobileMode = false; // forced mobile layout (button on loading screen for phone players)
 let smileySize = 1; // desktop pet scale 0.5x - 2x
+let retroMode = false; // secret "Retro Frame Retro Theme" unlocked by Ultra
 function setSmileySize(v) {
   smileySize = Math.max(0.5, Math.min(2, parseFloat(v) || 1));
   document.getElementById("smileyFace").style.zoom = smileySize;
@@ -289,6 +359,8 @@ function applyVaultState() {
     // hats persist; ultra + admin are stripped on refresh (recover via Files backup or 593)
     if (v.licenses.hats) Object.keys(owned.hats).forEach((h) => { owned.hats[h] = owned.hats[h] || !!v.licenses.hats[h]; });
     if (v.licenses.hacker) hackerPerms = true;
+    // apps listed here are reinstalled (used by a clean Refresh)
+    if (v.licenses.apps) Object.keys(v.licenses.apps).forEach((k) => { if (APPS.some((a) => a.id === k) && v.licenses.apps[k]) ownedApps[k] = true; });
   }
   updateCashHud();
   applyPlainDisplay();
@@ -462,7 +534,7 @@ function clearMemory() {
   isAdmin = false;
   infiniteMoney = false;
   owned = { ultra: false, hats: { top: false, cap: false, cowboy: false, grad: false, helmet: false, beanie: false }, diamonds: false };
-  ownedApps = { installer: true, settings: true, files: true, games: true, terminal: true, phone: true, firewall: true, updates: true, achievements: true, smiley: true, test: true };
+  ownedApps = { installer: true, settings: true, files: true, games: true, terminal: true, phone: true, firewall: true, updates: true, achievements: true, smiley: true, test: true, pictureboard: true };
   hackerPerms = false;
   equippedHat = "none";
   playerCash = 0;
@@ -484,12 +556,48 @@ function clearMemory() {
   } catch (e) {}
   location.reload();
 }
+// Refresh (deletes everything): wipes your progress, UNINSTALLS Yuki, and
+// REINSTALLS every app so you get a clean desktop. Achievements always survive.
+function refreshGame() {
+  yukiUnlocked = false;
+  yukiHacked = false;
+  yukiActive = false;
+  yukiBusy = false;
+  yukiForm = "demon";
+  playerCash = 5000;
+  isAdmin = false;
+  infiniteMoney = false;
+  try { document.getElementById("yuki")?.remove(); } catch (e) {}
+  try { if (typeof stopYukiMusic === "function") stopYukiMusic(); } catch (e) {}
+  try { clearInterval(window._ykBeef); } catch (e) {}
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  try {
+    // Free apps stay; everything else (all AIs except Smiley) disappears. Achievements are forever.
+    const allApps = {};
+    APPS.forEach((a) => { if (a.price === 0) allApps[a.id] = true; });
+    localStorage.setItem(VAULT_KEY, JSON.stringify({
+      licenses: { ultra: false, hats: { top: false, cap: false, cowboy: false, grad: false, helmet: false, beanie: false }, admin: false, apps: allApps, hacker: false, diamonds: false, arcade: false },
+      installed: {},
+      trash: [],
+      achievements: [...unlockedAchievements], // achievements are forever
+      owner: ownerAccount,
+    }));
+  } catch (e) {}
+  location.reload();
+}
 let hadSave = false;
 let appHistory = []; // app ids opened, in order (for prediction)
 let lastPredictBoast = 0;
 function canPredict() { return isAdmin || owned.ultra; } // gated perk
+function showRollingSmiley() {
+  const el = document.getElementById("rollingSmiley");
+  if (!el) return;
+  // stays visible once it appears; only a full refresh (reload) clears it
+  el.classList.remove("hidden");
+}
 function saveGame() {
   writeVault(); // trash + licenses always persist
+  showRollingSmiley(); // a rolling smiley rides the bottom while your progress is saved
   // everything saves for everyone now - only Clear Memory wipes saves
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
@@ -499,7 +607,7 @@ function saveGame() {
       name: smileyMemory.name, insults: smileyMemory.insultCount, compliments: smileyMemory.complimentCount,
       feel: smileyFeel, slides, slideIdx, follow: smileyFollow, mailPopups,
       admin: isAdmin, infinite: infiniteMoney, history: appHistory.slice(-50),
-      color: smileyColor, banned: bankBanned, installed, trash: trashBin, apps: ownedApps, hacker: hackerPerms, wall: wallpaper, cmds: customCmds, censor: censorOn, music: musicTrack, games: [clickerWins, luckyWins], arcade: arcadeOn, dev: devMode, size: smileySize, scythe: scytheUnlocked, scytheDesk: scytheDesktopOn, suggestions: updateSuggestions, bannedCallers: [...bannedCallers], windowsEdition, mobileMode, mafiaDebt, mafiaDue, smileyAlive, burgerCash, verity: (typeof verityCount !== "undefined" ? verityCount : 0), questMail: questMailArrived, custom: customAI, owner: ownerAccount,
+      color: smileyColor, banned: bankBanned, installed, trash: trashBin, apps: ownedApps, hacker: hackerPerms, wall: wallpaper, cmds: customCmds, censor: censorOn, music: musicTrack, games: [clickerWins, luckyWins], arcade: arcadeOn, dev: devMode, size: smileySize, scythe: scytheUnlocked, scytheDesk: scytheDesktopOn, suggestions: updateSuggestions, bannedCallers: [...bannedCallers], windowsEdition, mobileMode, mafiaDebt, mafiaDue, smileyAlive, burgerCash, verity: (typeof verityCount !== "undefined" ? verityCount : 0), questMail: questMailArrived, custom: customAI, owner: ownerAccount, yuki: yukiUnlocked, yukiForm, yukiHack: yukiHacked, retro: retroMode,
     }));
   } catch (e) {}
 }
@@ -553,6 +661,10 @@ function loadGame() {
     if (!smileyAlive) hideSmiley();
   }
   if (d.scytheDesk) { scytheDesktopOn = true; document.getElementById("petScythe")?.classList.remove("hidden"); }
+  if (typeof d.yuki === "boolean") yukiUnlocked = d.yuki;
+  if (d.yukiForm === "demon" || d.yukiForm === "corner" || d.yukiForm === "ball") yukiForm = d.yukiForm;
+  if (typeof d.yukiHack === "boolean") yukiHacked = d.yukiHack;
+  if (typeof d.retro === "boolean") { retroMode = d.retro; applyRetroTheme(); }
   if (d.censor) censorOn = true;
   if (d.music === "crunchy" || d.music === "jazz") musicTrack = d.music;
   if (typeof d.dev === "boolean") devMode = d.dev;
@@ -744,6 +856,7 @@ function unlockAdmin() {
   setSmileyMood("scared");
   smileyGesture("wave");
   smileySay("W-wait... how do you know that code?! Okay... you're the admin now...", 4000);
+  startSmileyPetsYuki();
   // Admin perk: cursor-following is one chat away (opt-in only).
   setTimeout(() => smileySay("Say 'follow me' and I'll trail your cursor. I see all.", 3500), 4200);
   saveGame();
@@ -1382,6 +1495,7 @@ function openApp(id) {
   openWins[id] = win;
   renderBody(id);
   renderTasks();
+  clampWindowOnScreen(win); // pop-ups were going below the screen
   smileyCheckBrowser(); // Smiley reacts when windows open/close
   smileyPredicts(id); // he learns your patterns (Admin/Ultra)
   unlockAchievement("open_app");
@@ -1456,6 +1570,19 @@ function makeDraggable(win, handle) {
 // Shared drag bounds: desktop keeps an 80px grab sliver, small screens
 // (mobile, <=820px like the CSS breakpoint) keep popups FULLY on-screen
 // so touch users can never lose a window off the edge.
+function clampWindowOnScreen(win) {
+  const desk = document.getElementById("desktop");
+  const wrap = document.getElementById("windows");
+  const task = document.getElementById("taskbar");
+  if (!desk || !wrap) return;
+  const wrapR = wrap.getBoundingClientRect();
+  const deskR = desk.getBoundingClientRect();
+  const taskH = task ? task.offsetHeight : 40;
+  const maxLeft = (deskR.right - wrapR.left) - win.offsetWidth - 6;
+  const maxTop = (deskR.bottom - wrapR.top) - taskH - win.offsetHeight - 6;
+  win.style.left = Math.max(6, Math.min(win.offsetLeft, Math.max(6, maxLeft))) + "px";
+  win.style.top = Math.max(6, Math.min(win.offsetTop, Math.max(6, maxTop))) + "px";
+}
 function clampWinBounds(win, handle) {
   const desk = document.getElementById("desktop");
   const task = document.getElementById("taskbar");
@@ -1499,6 +1626,130 @@ startMenu.querySelectorAll("button").forEach((b) => {
 });
 
 // --- App contents ---
+// --- Picture Board: pictures of every character. Unlock them all -> crown + Photocopier badge. ---
+// Each character uses its REAL in-game markup (scaled down) so it looks exactly like AI mode.
+let smileyCloneCount = 0;
+function spawnSmileyClone() {
+  smileyCloneCount++;
+  const desk = document.getElementById("desktop");
+  if (!desk) return;
+  const c = document.createElement("div");
+  c.className = "smiley-clone";
+  c.style.left = (12 + Math.random() * 62) + "%";
+  c.style.top = (14 + Math.random() * 52) + "%";
+  c.innerHTML = `<div class="smiley-face" data-mood="happy" data-detail="normal" data-outfit="none">
+    <div class="s-eye l"><div class="s-pupil"></div></div><div class="s-eye r"><div class="s-pupil"></div></div>
+    <div class="s-cheek l"></div><div class="s-cheek r"></div><div class="s-mouth"></div>
+  </div><div class="clone-tag">#${smileyCloneCount}</div>`;
+  desk.appendChild(c);
+  // the real Smiley reacts
+  if (smileyCloneCount >= 5) {
+    setSmileyMood("concerned");
+    smileySay("Hey can you please stop doing that? That's going to break the game.", 5200);
+  } else {
+    setSmileyMood("happy");
+    smileySay("Another me?! There's " + smileyCloneCount + " of me now!", 3000);
+  }
+}
+function renderSmileyAIDesktop() {
+  const v = document.getElementById("webView");
+  if (!v) return;
+  const apps = APPS.filter((a) => installed[a.id] !== false && appOwned(a.id) && (a.id !== "admin" || !adminHidden) && (a.id !== "test" || devMode) && (a.id !== "scythe" || scytheUnlocked));
+  v.innerHTML = `
+    <div class="mini-desktop">
+      <div class="mini-icons">
+        ${apps.map((a) => `<div class="mini-icon" onclick="openApp('${a.id}')"><span class="emoji">${a.emoji}</span>${a.name}</div>`).join("")}
+      </div>
+      <div class="mini-smiley">
+        <div class="smiley-face" data-mood="happy" data-detail="normal" data-outfit="none">
+          <div class="s-eye l"><div class="s-pupil"></div></div><div class="s-eye r"><div class="s-pupil"></div></div>
+          <div class="s-cheek l"></div><div class="s-cheek r"></div><div class="s-mouth"></div>
+        </div>
+      </div>
+      <div class="mini-taskbar"><span class="mini-start">☰ Start</span><span class="mini-hint">You're on the computer — click any app to use it!</span></div>
+    </div>`;
+}
+function realFaceMarkup(kind) {
+  const wrap = (inner, scale) => `<div class="pb-portrait"><div class="pb-face" style="transform:scale(${scale})">${inner}</div></div>`;
+  if (kind === "smiley") {
+    return wrap(`<div class="smiley-face" data-mood="happy" data-detail="normal" data-outfit="none">
+      <div class="s-ear left"></div><div class="s-ear right"></div><div class="s-pixel"></div>
+      <div class="s-freckle f1"></div><div class="s-freckle f2"></div><div class="s-freckle f3"></div><div class="s-freckle f4"></div>
+      <div class="s-shine"></div>
+      <div class="s-eye l"><div class="s-pupil"></div></div><div class="s-eye r"><div class="s-pupil"></div></div>
+      <div class="s-cheek l"></div><div class="s-cheek r"></div>
+      <div class="s-mouth"><div class="s-tongue"></div></div>
+    </div>`, 1.0);
+  }
+  if (kind === "scythe") {
+    return wrap(`<div class="scythe-face"><div class="s-hat"></div><div class="sc-eye l"></div><div class="sc-eye r"></div><div class="sc-mouth"></div></div>`, 1.15);
+  }
+  if (kind === "yuki") {
+    return wrap(`<div class="yk-wrap" data-mood="happy">${YUKI_ART}</div>`, 0.5);
+  }
+  if (kind === "clippy") {
+    return wrap(`<div class="pet-face clippy-face"><div class="c-eye l"></div><div class="c-eye r"></div><div class="c-mouth"></div></div>`, 1.15);
+  }
+  if (kind === "byte") {
+    return wrap(`<div class="pet-face byte-face"><div class="b-antenna"></div><div class="b-eye l"></div><div class="b-eye r"></div><div class="b-mouth"></div></div>`, 1.5);
+  }
+  if (kind === "liam") {
+    return wrap(`<div class="pet-face liam-face"><div class="li-eye l"></div><div class="li-eye r"></div><div class="li-mouth"></div></div>`, 1.5);
+  }
+  if (kind === "fanart") {
+    return wrap(`${fanSmiley(40, 40, 26)}`, 1.1);
+  }
+  return wrap(`<div class="pb-generic">🎨</div>`, 1);
+}
+const PICTURE_CHARACTERS = [
+  { id: "smiley", name: "Smiley", emoji: "🙂", unlocked: () => true, art: () => realFaceMarkup("smiley") },
+  { id: "scythe", name: "ScytheAI", emoji: "🤠", unlocked: () => !!scytheUnlocked, art: () => realFaceMarkup("scythe") },
+  { id: "yuki", name: "Yuki", emoji: "🔮", unlocked: () => !!yukiUnlocked, art: () => realFaceMarkup("yuki") },
+  { id: "clippy", name: "ClippyPlus", emoji: "📎", unlocked: () => !!ownedApps.dl_clippy, art: () => realFaceMarkup("clippy") },
+  { id: "byte", name: "ByteBuddy", emoji: "🤖", unlocked: () => !!ownedApps.dl_byte, art: () => realFaceMarkup("byte") },
+  { id: "liam", name: "Liam AI", emoji: "🧠", unlocked: () => !!ownedApps.liam, art: () => realFaceMarkup("liam") },
+  { id: "fanart", name: "Fan Art", emoji: "🖼️", unlocked: () => !!ownedApps.fanart, art: () => realFaceMarkup("fanart") },
+  { id: "custom", name: "Your Buddy", emoji: "🎨", unlocked: () => !!customAI, art: () => `<div class="pb-portrait"><div class="pb-face"><div class="pb-generic" style="background:${customAI ? customAI.color || "#34d399" : "#34d399"}">${customAI ? customAI.emoji || "🎨" : "🎨"}</div></div></div>` },
+];
+function allCharactersUnlocked() {
+  return PICTURE_CHARACTERS.every((c) => c.unlocked());
+}
+function renderPictureBoard(b) {
+  const all = allCharactersUnlocked();
+  const unlockedCount = PICTURE_CHARACTERS.filter((c) => c.unlocked()).length;
+  b.innerHTML = `
+    <h3>🖼️ Picture Board</h3>
+    <p style="font-size:12px;color:#555">Pictures of every character. Unlock them <b>ALL</b> and a crown pops up!</p>
+    <div class="pb-progress"><div class="pb-progress-fill" style="width:${Math.round((unlockedCount / PICTURE_CHARACTERS.length) * 100)}%"></div></div>
+    <p style="font-size:12px;color:#555">${unlockedCount} / ${PICTURE_CHARACTERS.length} characters unlocked</p>
+    <div class="pb-grid">
+      ${PICTURE_CHARACTERS.map((c) => {
+        const has = c.unlocked();
+        return `<div class="pb-card ${has ? "unlocked" : "locked"}">
+          <div class="pb-icon">${has ? c.art() : "🔒"}</div>
+          <div class="pb-name">${c.name}</div>
+          <div class="pb-desc">${has ? "Unlocked!" : "Locked"}</div>
+        </div>`;
+      }).join("")}
+    </div>
+    ${all ? `<div class="pb-crown" id="pbCrown">👑</div>` : ""}`;
+  if (all && !unlockedAchievements.has("photocopier")) {
+    // Crown pops up + grant the Photocopier badge
+    setTimeout(() => {
+      const crown = document.getElementById("pbCrown");
+      if (crown) {
+        crown.classList.add("pop");
+        beep(523, 784, 0.25, "triangle");
+        beep(659, 1047, 0.3, "triangle");
+      }
+      unlockAchievement("photocopier");
+      setSmileyMood("happy");
+      smileySay("A CROWN! You unlocked EVERY character! Photocopier badge: MINE!", 5000);
+      saveGame();
+    }, 600);
+  }
+}
+
 function renderBody(id) {
   const b = document.getElementById("body-" + id);
   if (!b) return; // window not open (or already closed) — safe no-op
@@ -1612,6 +1863,7 @@ function renderBody(id) {
         <button onclick="callSam()">📞 Call Sam</button>
         <button onclick="callBank()">🏦 Call Bank (loan)</button>
         <button onclick="callScythe()">🤠 Call ScytheAI</button>
+        ${yukiUnlocked ? `<button onclick="callYuki()" style="background:#7c3aed;border-color:#a855f7">🔮 Call Yuki</button>` : ""}
       </div>
       <div class="game-box" style="border-color:#e53e3e">
         <h4>💰 Call the Mafia (danger)</h4>
@@ -1680,6 +1932,9 @@ function renderBody(id) {
         }).join("")}
       </div>
       ${isAdmin ? `<button onclick="resetAchievements()" style="margin-top:8px">↺ Reset achievements (admin)</button>` : ""}`;
+  }
+  if (id === "pictureboard") {
+    renderPictureBoard(b);
   }
   if (id === "fanart") {
     // Fan Art: $5 app. Hand-drawn SVG pieces from the community. Smiley is drawn like the REAL in-game one.
@@ -1875,6 +2130,9 @@ function renderBody(id) {
       </div>
       <p style="font-size:12px;margin:2px 0 6px">Click any update to watch its trailer — Smiley narrates it out loud. ▶</p>
       <div class="call-log up-list" style="max-height:260px">
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.33</b> - POP-UP RESCUE + CLEAN WIPES: windows were opening <b>below the bottom of the screen</b> because the window container sat after the icon grid. Fixed — every window now opens fully on-screen (and on mobile). Also: <b>Delete All</b> now makes everything except the free stuff disappear — every AI except <b>Smiley</b> is gone (Clippy, Byte, Liam, Scythe, Yuki). And <b>Refresh (deletes everything)</b> now truly starts you over with only the free apps + Smiley.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.32</b> - YUKI DOES YOUR DIRTY WORK: Yuki has <b>no body</b> now — he's one purple ball with horns and a tail (drag him <b>off screen</b> for the plain little ball form like Smiley). Grab him and he snaps: "Hey dipshit, let me go." Park him in a <b>corner</b> and he turns Scythe-style with a name tag AND a <b>Call button</b> (or Call Yuki from the Phone) — then you two, him and Smiley, actually talk… and, honestly, they're <b>kind of friends</b> (they still beef after he wipes your PC). He also helps now: spam call? He walks up, pulls out an animated <b>purple hand</b>, and clicks the <b>Block</b> button for you ("Hey you actually need some. Never mind."). A hacker tries to get in? "Hey dimshit, <b>that's my job</b>" — and he hacks the hacker instead. He's also a <b>SmileyTube video</b> now, and if you have him he'll randomly <b>take over any video</b> you watch. Also: call <b>ScytheAI</b> and there's a 40% chance she notices Yuki on your desktop — they argue angerily about both knowing Smiley. Also: in <b>admin mode</b>, Smiley will randomly walk up and <b>pet Yuki</b> (happy bounce). Also: type <b>"Hey what are you two little lovebirds doing?"</b> in Smiley's chat — in normal mode he says "Hey never mind. It's just business, okay?"; in <b>Liam mode</b> they slowly fall for each other on the desktop (snail-slow speech bubbles: compliments, "love you," cheek kiss 💋). Also: a new <b>SmileyTube video</b> — "Scythe Reviews: The Lovebirds" (Scythe narrates their whole love story). Also: if you're watching a video, Yuki may interrupt with "Hey dipshit, we're trying to get some privacy in here." — he throws the YouTube page out and drags Smiley (and Scythe, if she's around) off screen (hearts float up); when Smiley comes back he says "My back is sore." Also: Smiley no longer copies the subtitles out loud while a YouTube video plays. Also: if the <b>mafia</b> comes to break the screen, Yuki grabs the fist and rebuilds the screen — Smiley survives and keeps his apps. Also: the <b>Refresh (deletes everything)</b> button on the main menu now actually works — it wipes your progress, <b>uninstalls Yuki</b> (find him again by searching "yuki"), and <b>reinstalls every app</b> fresh. And <b>Ainsley</b> is now credited as the person who made <b>ScytheAI</b> (Credits button on the main menu). Also: a hidden site <b>"You Are An Idiot"</b> (search it in the Browser) — download the "free software" and white + black smileys flood your screen till there's no speck left. Smiley can't stop them. Yuki can't stop them. Nobody can. When it corrupts your PC it says "Downloading virus. Virus installed. Good luck in hell.", breaks the screen and throws it off — and the only way out is to <b>Refresh Everything</b>. Also: a new <b>boot screen</b> — the computer is built piece by piece ("memory okay", "saves okay", "😊 has been woken up"). Also: a <b>Picture Board</b> app showing every character's real face (unlock all → crown + Photocopier badge). Also: a brand-new game — <b>🟥 Roblox</b>! Move the blocky noob, jump, and collect Robux on the green baseplate.</div>
+        <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.31</b> - YUKI: search <b>yuki</b> in the Browser and the whole search engine turns purple. There's a new character in there — Yuki, a purple demon with <b>horns</b>, a <b>tail</b> and a gold <b>star on his stomach</b>, as detailed as Smiley and with his own moods (click him). Smiley begs: "I advise you to not do this. If you do, well, everything goes to hell." The <b>Download</b> button flickers like a flashing light. Press it and it says "Downloading virus. Good luck." over sharp, jagged music — then Yuki hacks EVERYTHING, deletes Smiley, deletes every single thing you have, and pops up: "hey dumbass. Nice job killing your own PC." After that he lives on your desktop: drag him into a <b>corner</b> to make him turn into his Scythe-style pet form with his <b>name tag</b>, or drag him <b>off the screen</b> to make him the little <b>ball form like Smiley</b>.</div>
         <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.30</b> - THE REAL SMILEY, HEAD ONLY: Smiley.org is now the exact Smiley you see on the computer — same yellow ball, same eyes, same smile, same everything. No body, no arms, no legs, no antenna. Every emotion is 1:1 accurate because it uses the real AI's own mood styles. Cool mode now just puts on sunglasses (the same size as his real eyes, not smaller) and smirks. The optional anatomy now shows what's inside the ball: skeleton, organs, and how he moves.</div>
         <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.29</b> - SMILEY.ORG: ALL EMOTIONS + ANATOMY: the final game now matches the REAL Smiley AI. Trigger every emotion he has — Normal, Happy, Sad, Angry, Furious, Scared, Worried, Concerned, Cool and Hacked — plus Wave, Jump, Dance, Talk, Sleep and Spin. Then open his anatomy if you want: his titanium <b>skeleton</b>, his <b>organs</b> (memory chip, emotion core, gyroscope, voice box, power cell, snack pouch), and <b>how he moves</b>.</div>
         <div class="up-entry" onclick="upTrailer(this)"><span class="up-badge">NEW</span><b>v2.28</b> - THE ARCADE: search "games" in the Browser (it's NOT one of the quick links — you have to search it) to open the Arcade. It has FNAF-style <b>Five Nights at Smiley's</b> (slam the doors, survive to 6 AM, +$150), <b>Smiley Clicker</b>, and the FINAL game <b>Smiley.org</b> — where you see Smiley's WHOLE BODY and everything he does: wave, jump, dance, talk, sleep, get angry, spin.</div>
@@ -2021,6 +2279,11 @@ function renderBody(id) {
         ${Object.keys(HAT_EMOJI).map((h) => hatBtn(h, HAT_EMOJI[h], h[0].toUpperCase() + h.slice(1))).join("")}
       </div>
       <p id="hatMsg" style="color:#666">Wearing: ${equippedHat}</p>
+      ${owned.ultra || isAdmin ? `
+      <p><b>Secret mode</b> (unlocked by Ultra):</p>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;">
+        <button onclick="toggleRetroTheme()">🎮 Retro Frame Retro Theme: ${retroMode ? "ON" : "OFF"}</button>
+      </div>` : ""}
       ${isAdmin ? `
       <p><b>NEW Features Board</b>:</p>
       <div style="display:flex;gap:4px;flex-wrap:wrap;">
@@ -2258,6 +2521,13 @@ function byteBarrage() {
         <button onclick="startArcade()">▶ Start Blaster</button>`
         : `<p>🔒 Download <b>Smiley.org</b> in the Browser Downloads to unlock the arcade!</p>`}
       </div>
+      <div class="game-box roblox-box">
+        <h4>🟥 Roblox</h4>
+        <div class="roblox-logo"><span class="rbx-r">R</span>O B L O X</div>
+        <div id="robloxZone"></div>
+        <p style="font-size:12px">Robux: <span id="robloxCash">0</span> · Move: ←/→ or A/D · Jump: Space/↑</p>
+        <button onclick="startRoblox()">▶ Play Roblox</button>
+      </div>
       <div class="game-box">
         <h4>🛒 Shop (spend cash)</h4>
         <div class="shop-row"><span>♾️ BUY INFINITE (everything) - $${infinitePrice()}</span><button onclick="buyInfinite()" ${infinitePrice() === 0 ? "disabled" : ""}>${infinitePrice() === 0 ? "Owned" : "Buy all"}</button></div>
@@ -2337,7 +2607,34 @@ function webShow(q) {
   const v = document.getElementById("webView");
   if (!v) return;
   q = String(q || "").toLowerCase().trim();
-  if (q.includes("game") || q.includes("smiley.org") || q.includes("smileyorg") || q.includes("arcade")) {
+  yukiTheme(false); // every search starts clean; the yuki page turns everything purple again
+  if (q.includes("yuki")) {
+    // The purple demon. Smiley begs you not to. The download button should not be pressed.
+    setSmileyMood("worried");
+    smileySay("I advise you to not do this. If you do, well, everything goes to hell.", 7000);
+    yukiTheme(true);
+    v.innerHTML = `<div class="yk-page">
+      <div class="yk-flag">⚠ UNVERIFIED SITE — do not trust ⚠</div>
+      <h3>🔮 Yuki</h3>
+      <p class="yk-tag"><i>the download that bites back.</i></p>
+      <div class="yk-card">
+        <div class="yk-wrap yk-preview" id="ykArt" data-mood="normal">${YUKI_ART}</div>
+        <div class="yk-meta">
+          <p><b>Name:</b> Yuki</p>
+          <p><b>Type:</b> purple demon AI</p>
+          <p><b>Horns:</b> yes &nbsp;·&nbsp; <b>Tail:</b> yes &nbsp;·&nbsp; <b>Star:</b> on his stomach</p>
+          <p><b>Mood:</b> <span id="ykArtMood">normal</span> (click him)</p>
+          <p><b>Does:</b> hacks absolutely everything.</p>
+          <p class="yk-danger"><b>Deletes:</b> Smiley, your apps, your files, your whole PC.</p>
+        </div>
+      </div>
+      <button id="ykDlBtn" class="yk-dl" onclick="yukiDownload()">⬇ DOWNLOAD</button>
+      <p id="ykMsg" class="yk-msg"></p>
+      <div id="ykBarWrap" class="yk-bar-wrap hidden"><div id="ykBar" class="yk-bar"></div></div>
+    </div>`;
+    const art = document.getElementById("ykArt");
+    if (art) art.onclick = () => yukiPreviewMood();
+  } else if (q.includes("game") || q.includes("smiley.org") || q.includes("smileyorg") || q.includes("arcade")) {
     // The arcade: every game on this computer. Reachable by SEARCHING "games" (not a quick link).
     v.innerHTML = `<h3>🕹️ Arcade - Games</h3>
       <p style="font-size:12px;color:#888">Every game on this computer. Work your way down to the FINAL game.</p>
@@ -2369,6 +2666,14 @@ function webShow(q) {
     v.innerHTML = `<h3>🧾 Pixel Tax Office</h3>
       <p>Tax season is here! Good news: every citizen got a <b>$9,000 refund</b>.</p>
       <p>Check <b>Files > tax-refund.txt</b> to claim yours. The government is generous and a little weird.</p>`;
+  } else if (q.includes("smiley ai") || q.includes("smileyai") || q.includes("smiley a i")) {
+    // You're now ON the computer: an identical, fully-working clone of your desktop.
+    smileyCloneCount++;
+    renderSmileyAIDesktop();
+    if (smileyCloneCount >= 5) {
+      setSmileyMood("concerned");
+      smileySay("Hey can you please stop doing that? That's going to break the game.", 5200);
+    }
   } else if (q.includes("smiley") || q.includes("how") || q.includes("ball") || q.includes("ai")) {
     v.innerHTML = `<h3>🙂 How Smiley AI works</h3>
       <p>Smiley is a round yellow ball powered by <b>feelings</b> (happy, sad, angry) and <b>corners</b> (he lives in one).</p>
@@ -2393,8 +2698,21 @@ function webShow(q) {
       <input type=text id="secretPass" placeholder="password" style="width:100px" />
       <button onclick="secretLogin()">Log in</button>
       <p id="secretMsg"></p>`;
+  } else if (q.includes("shorts") || q.includes("short")) {
+    showShorts();
+  } else if (q.includes("you are an idiot") || q.includes("idiot") || q.includes("idiot.io")) {
+    v.innerHTML = `<h3>🤡 you-are-an-idiot.io</h3>
+      <p style="font-size:12px;color:#555">This website is COMPLETELY LEGIT and has NO viruses whatsoever.</p>
+      <div class="idiot-site">
+        <div class="idiot-logo">🤡</div>
+        <p><b>WELCOME, IDIOT!!!</b></p>
+        <p>Download our FREE and TOTALLY LEGIT software! It does everything! Probably!</p>
+        <button class="idiot-download" onclick="downloadIdiot()">⬇️ Download Now (FREE!)</button>
+        <p style="color:#888;font-size:11px">Note: not responsible for any destroyed computers, broken screens, or eternal damnation.</p>
+      </div>`;
   } else if (q.includes("youtube") || q.includes("video") || q.includes("tube") || q.includes("review")) {
     v.innerHTML = `<h3>📺 SmileyTube</h3>
+      <div style="margin-bottom:8px"><button onclick="showShorts()">📱 Shorts (${YT_SHORTS.length}+)</button></div>
       <div class="yt-card"><b>Smiley Reviews: THIS Website</b> ⭐⭐⭐⭐⭐<br><button onclick="webVideo(1)">▶ Play</button></div>
       <div class="yt-card"><b>Smiley Reviews: Byte &amp; Clippy</b> ⭐⭐<br><button onclick="webVideo(2)">▶ Play</button></div>
       <div class="yt-card"><b>Smiley Reviews: Liam</b> ⭐⭐⭐⭐⭐<br><button onclick="webVideo(3)">▶ Play</button></div>
@@ -2419,6 +2737,8 @@ function webShow(q) {
       <div class="yt-card"><b>Smiley Reviews: The Update Board</b> ⭐⭐⭐⭐⭐<br><button onclick="webVideo(22)">▶ Play</button></div>
       <div class="yt-card"><b>Smiley Reviews: The Suggestion Box</b> ⭐⭐⭐⭐<br><button onclick="webVideo(23)">▶ Play</button></div>
       <div class="yt-card"><b>Smiley Reviews: Build-Your-Buddy</b> ⭐⭐⭐⭐⭐<br><button onclick="webVideo(24)">▶ Play</button></div>
+      <div class="yt-card"><b>☠️ Smiley Reviews: Yuki (DO NOT SEARCH "yuki")</b> ☠️<br><button onclick="webVideo(25)">▶ Play</button></div>
+      <div class="yt-card"><b>🤠 Scythe Reviews: The Lovebirds</b> ⭐⭐⭐⭐⭐<br><button onclick="webVideo(26)">▶ Play</button></div>
       <div id="ytPlayer"></div>`;
   } else if (q.includes("ghost") || q.includes("spooky") || q.includes("scary")) {
     v.innerHTML = `<h3>👻 The Ghost in the Desktop</h3>
@@ -2604,6 +2924,7 @@ function grantEverything() {
   document.getElementById("startAdmin")?.classList.remove("hidden");
   renderIcons();
   saveGame();
+  startSmileyPetsYuki();
 }
 function claimSmileyorgBonus() {
   if (!isAdmin || !ownedApps.smileyorg) return;
@@ -2632,6 +2953,7 @@ function secretLogin() {
 
 let arcadeCtx = null;
 let arcadeGen = 0;
+let robloxGen = 0;
 function beep(f0, f1, dur, type) {
   try {
     if (!arcadeCtx) arcadeCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -2731,6 +3053,102 @@ function startArcade() {
   requestAnimationFrame(frame);
 }
 
+// --- ROBLOX: a blocky Roblox-style game. Move the noob, jump, collect Robux. ---
+function startRoblox() {
+  const zone = document.getElementById("robloxZone");
+  if (!zone) return;
+  zone.innerHTML = '<canvas id="robloxCv" width="340" height="180" style="border:3px solid #e2231a;background:#87ceeb;max-width:100%"></canvas>';
+  const cv = document.getElementById("robloxCv");
+  const ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height, GROUND = H - 40;
+  const myGen = ++robloxGen;
+  const P = { x: W / 2, y: GROUND, vy: 0, dir: 1 };
+  let robux = [], coins = 0, t = 0, keys = {}, cool = 0;
+  // spawn floating Robux
+  const spawnCoin = () => robux.push({ x: 30 + Math.random() * (W - 60), y: 30 + Math.random() * (GROUND - 70), bob: Math.random() * 6 });
+  for (let i = 0; i < 8; i++) spawnCoin();
+  setSmileyMood("happy");
+  smileySay("Welcome to ROBLOX! Collect the Robux!", 3000);
+  const kd = (e) => {
+    keys[e.key.toLowerCase()] = true;
+    if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(e.key.toLowerCase())) e.preventDefault();
+  };
+  const ku = (e) => { keys[e.key.toLowerCase()] = false; };
+  document.addEventListener("keydown", kd);
+  document.addEventListener("keyup", ku);
+  const sc = () => document.getElementById("robloxCash");
+  function endRoblox() {
+    over = true;
+    document.removeEventListener("keydown", kd);
+    document.removeEventListener("keyup", ku);
+    addCash(coins * 5);
+    if (sc()) sc().textContent = coins;
+    setSmileyMood("happy");
+    smileyGesture("thumbsup");
+    smileySay("Roblox over! You got " + coins + " Robux. +$" + (coins * 5) + "!", 3500);
+    saveGame();
+    renderBody("games");
+  }
+  let over = false;
+  function drawNoob(x, y, dir) {
+    // classic Roblox noob: yellow head, blue shirt, green pants
+    const s = 1;
+    ctx.fillStyle = "#00a2ff"; ctx.fillRect(x - 10 * s, y - 30 * s, 20 * s, 22 * s); // shirt
+    ctx.fillStyle = "#0b6b2b"; ctx.fillRect(x - 10 * s, y - 8 * s, 9 * s, 14 * s); ctx.fillRect(x + 1 * s, y - 8 * s, 9 * s, 14 * s); // legs
+    ctx.fillStyle = "#ffde00"; ctx.fillRect(x - 13 * s, y - 30 * s, 6 * s, 18 * s); ctx.fillRect(x + 7 * s, y - 30 * s, 6 * s, 18 * s); // arms
+    ctx.fillStyle = "#ffde00"; ctx.fillRect(x - 11 * s, y - 46 * s, 22 * s, 16 * s); // head
+    // face
+    ctx.fillStyle = "#000";
+    ctx.fillRect(x - 6 * s + dir * 2, y - 42 * s, 3 * s, 4 * s);
+    ctx.fillRect(x + 3 * s + dir * 2, y - 42 * s, 3 * s, 4 * s);
+    ctx.fillRect(x - 5 * s + dir * 2, y - 36 * s, 10 * s, 2 * s); // smile
+  }
+  function drawCoin(c) {
+    const by = Math.sin(t / 20 + c.bob) * 3;
+    ctx.fillStyle = "#0e9f6e"; ctx.beginPath(); ctx.arc(c.x, c.y + by, 9, 0, 7); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.font = "bold 10px Arial"; ctx.textAlign = "center"; ctx.fillText("R$", c.x, c.y + by + 3.5);
+  }
+  function frame() {
+    if (myGen !== robloxGen || !document.getElementById("robloxCv")) { document.removeEventListener("keydown", kd); document.removeEventListener("keyup", ku); return; }
+    if (over) return;
+    t++;
+    if (keys["arrowleft"] || keys["a"]) { P.x -= 3.2; P.dir = -1; }
+    if (keys["arrowright"] || keys["d"]) { P.x += 3.2; P.dir = 1; }
+    P.x = Math.max(16, Math.min(W - 16, P.x));
+    if ((keys[" "] || keys["arrowup"] || keys["w"]) && P.y >= GROUND && cool <= 0) { P.vy = -10; cool = 12; beep(300, 650, 0.16, "square"); }
+    cool--;
+    P.vy += 0.55; P.y += P.vy;
+    if (P.y > GROUND) { P.y = GROUND; P.vy = 0; }
+    // collect robux
+    robux = robux.filter((c) => {
+      const by = Math.sin(t / 20 + c.bob) * 3;
+      if (Math.abs(c.x - P.x) < 16 && Math.abs(c.y + by - (P.y - 20)) < 22) {
+        coins++; if (sc()) sc().textContent = coins;
+        beep(880, 1320, 0.09, "triangle");
+        spawnCoin();
+        return false;
+      }
+      return true;
+    });
+    // sky + ground
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, "#8ed6ff"); sky.addColorStop(1, "#c9ecff");
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+    // clouds
+    ctx.fillStyle = "rgba(255,255,255,.85)";
+    for (let i = 0; i < 3; i++) { const cx = ((t * 0.3 + i * 130) % (W + 80)) - 40; ctx.beginPath(); ctx.ellipse(cx, 30 + i * 12, 22, 12, 0, 0, 7); ctx.fill(); }
+    // baseplate (green Roblox baseplate)
+    ctx.fillStyle = "#4a8f3c"; ctx.fillRect(0, GROUND + 8, W, H - GROUND);
+    ctx.fillStyle = "#63b34f"; ctx.fillRect(0, GROUND + 8, W, 6);
+    robux.forEach(drawCoin);
+    drawNoob(P.x, P.y, P.dir);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  // auto-end after a while so the player gets paid
+  setTimeout(() => { if (!over && myGen === robloxGen) endRoblox(); }, 45000);
+}
+
 const GHOST_LINES = [
   "BOO! I live in your recycle bin now!",
   "Do you pay rent? ...asking for a ball.",
@@ -2779,12 +3197,308 @@ const YT_VIDEOS = {
   22: { stars: "⭐⭐⭐⭐⭐", lines: ["The Update Board. My biography, basically.", "v0.1: just a wire. v1.0: feelings! v2.7: I FOUGHT Scythe on live TV. Cinema.", "Five stars. Read the whole saga in the Updates app. I cried. Twice."] },
   23: { stars: "⭐⭐⭐⭐", lines: ["The Suggestion Box. YOU pitch the next update.", "Someone asked for a beach level. Someone else asked for... a new guy?? Ansly, I KNOW that's you.", "Four stars. Keep the ideas coming. Admins are reading."] },
   24: { stars: "⭐⭐⭐⭐⭐", lines: ["Build-Your-Buddy. YOU design a desktop AI now.", "Name, face, paint job, personality. Mine's cuter. Obviously.", "Five stars. Just... don't make it cuter than me. Please."] },
+  25: { stars: "☠️", lines: ["Today I review... Yuki. The purple one.", "I'm not doing this. Don't search his name. DON'T search 'yuki'. I'm serious.", "If you do, everything goes to hell. That's a quote. From ME. About HIM.", "Zero stars. The scariest review I've ever done."] },
+  26: { stars: "🤠", scythe: true, lines: [
+    "Scythe here. Today I review... the lovebirds. Smiley and Yuki.",
+    "I watched them on the desktop. Holding hands. Well - hovering near each other.",
+    "He used to delete his whole computer. Now he says 'love you.' Pathetic. And... cute.",
+    "I'm not jealous. I'm just... observing. For science. And popcorn.",
+    "Five stars. For the drama. Don't tell them I said that.",
+  ] },
 };
-function webVideo(n) {
+// --- YouTube Shorts: quick 15-second videos (100+) ---
+const YT_SHORTS = [];
+(function buildShorts() {
+  const pool = [
+    "Smiley sneezes. The whole desktop shakes. Twice.",
+    "Byte stole my Game Boy again. Calling the police.",
+    "Clippy: 'It looks like you're trying to be sad.' Rude.",
+    "Liam beatboxed for 3 seconds. I cried for 3 hours.",
+    "The trash can is cozy. Don't judge me.",
+    "Jazz music makes me snap. In B-flat. Probably.",
+    "Cat ears on. Meow. That's the whole video.",
+    "593. Don't type it. Seriously. Don't.",
+    "The corner is my home. Bottom-right. Forever.",
+    "Ansly asked for a new guy AGAIN. Roster is FULL.",
+    "Scythe called. On speaker. Divorce papers in trash.",
+    "The fire alarm. Don't pull it. I mean it.",
+    "Bank of Pixel gave me money once. Purple monkey dishwasher.",
+    "Verity. No. Not doing it. One star.",
+    "Build-Your-Buddy is cute but mine is cuter. Obviously.",
+    "The update board. My biography. I cried twice.",
+    "Suggestion box: someone asked for a beach level.",
+    "Mafia. Don't borrow. The hand comes out.",
+    "Blue screen. The big sad face. That was MY face.",
+    "Smiley.org arcade. Blaster on Game Boy. Peak cinema.",
+    "Byte is 400% efficient. Allegedly.",
+    "ClippyPlus is so helpful. So smug.",
+    "Liam AI beatboxes. I vibe. Perfect.",
+    "Fan Art costs $5. Worth every pixel.",
+    "Cool Jazz or crunchy 3008 theme? You decide.",
+    "The mafia hand. I don't like the hand.",
+    "Yuki is purple. Purple is a personality.",
+    "Horns, a tail, and a whole lot of attitude.",
+    "Don't search 'yuki'. I'm serious. Don't.",
+    "Scythe reviews the lovebirds. Five stars. For drama.",
+    "My back is sore. Don't ask.",
+    "Hey dipshit, we're trying to get some privacy.",
+    "Smiley pets Yuki. Yuki pretends not to like it.",
+    "Lovebirds. Compliments. 'Love you.' Cheek kiss.",
+    "The purple hand clicks Block for you. You're welcome.",
+    "Yuki throws the YouTube page out. Rude.",
+    "Smiley gets dragged off screen. He doesn't remember.",
+    "Horns out, tail up. This is the real me.",
+    "I'm not a pet, cowboy. Back off.",
+    "We're a little bit friends. Don't tell anyone.",
+    "Hey dimshit, that's my job. (hacking the hacker)",
+    "Smiley's Creator badge: admin mode, Phone, send 523.",
+    "Credits: Liam, Ainsley, J, DeepSeek. And Smiley.",
+    "Ainsley made ScytheAI. She's the person.",
+    "The trash can. My second home. 12 times deleted.",
+    "Cat ears on me. Meow. That's the review.",
+    "The corner. Bottom-right. By the Off button. Home.",
+    "YOU. The viewer. Great taste. Subscribed.",
+    "Ansly asked for a new guy. The roster is FULL.",
+    "Scythe vs Smiley live fight. Cinema.",
+    "593. The admin code. My only weakness.",
+    "Censor mode. My mouth says #### but my heart says beep.",
+    "The blue screen. Too much crying. It was mine.",
+    "Don't borrow from the mafia. The hand. THE HAND.",
+    "The update board. My biography. v0.1 to v2.32.",
+    "Suggestion box: beach level. And... a new guy?? Ansly.",
+    "Build-Your-Buddy. Design your OWN AI. Mine's cuter.",
+    "Smiley.org. All emotions. Anatomy. Skeleton. Organs.",
+    "Cool mode = sunglasses. Same size as his eyes.",
+    "Yuki has no body. One ball. Horns. Tail.",
+    "Drag Yuki off screen = little ball form. Like Smiley.",
+    "Drag Yuki to a corner = Scythe form + name tag.",
+    "Call Yuki from the Phone. They beef. Kind of friends.",
+    "Smiley pets Yuki in admin mode. Happy bounce.",
+    "Lovebirds chat: 'Hey what are you two little lovebirds doing?'",
+    "Non-owner: 'Hey never mind. It's just business.'",
+    "Liam mode: snail-slow love story. Cheek kiss.",
+    "Scythe reviews the lovebirds. Five stars. For drama.",
+    "Mafia save: Yuki grabs the fist. Rebuilds screen.",
+    "Refresh deletes everything. Uninstalls Yuki. Reinstalls apps.",
+    "Achievements persist through refresh AND clear memory.",
+    "Smiley doesn't copy subtitles anymore. Quiet boy.",
+    "Yuki interrupts videos. 'Get some privacy.' Hearts.",
+    "My back is sore. Don't ask.",
+    "Scythe goes with him. Off screen. Together.",
+    "The purple hand clicks Block for you. You're welcome.",
+    "Yuki hacks the hacker. 'That's MY job.'",
+    "Spam call? Yuki walks up, presses Block.",
+    "Yuki talks to Smiley. They beef. Kind of friends.",
+    "Yuki hijacks videos randomly. If you have him.",
+    "Yuki is an achievement. 'Nice Job, Dumbass.'",
+    "Yuki is a YouTube video. Do NOT search 'yuki'.",
+    "The search engine turns purple for 'yuki'.",
+    "Download button flickers like a flashing light.",
+    "Downloading virus. Good luck. (jagged music)",
+    "hey dumbass. Nice job killing your own PC.",
+    "Reboot restores everything. Yuki goes to corner.",
+    "After reboot: beef. But they're kind of friends.",
+    "Yuki has emotions like Smiley. 8 moods.",
+    "Yuki is animated. Floats, blinks, talks.",
+    "Yuki is detailed. Like Smiley. All purple.",
+    "Yuki's art is a single source of truth (YUKI_ART).",
+    "Yuki spawns on the desktop if unlocked.",
+    "Yuki can be dragged. Corner or off-screen.",
+    "Yuki pokes = random mood. Click him.",
+    "Yuki says 'Hey dipshit, let me go.' when grabbed.",
+    "Smiley warns: 'I advise you to not do this.'",
+    "If you do, well, everything goes to hell.",
+    "Yuki deletes Smiley. Deletes everything.",
+    "Icons die. Taskbar dies. Smiley hidden.",
+    "Reboot restores icons, taskbar, Smiley.",
+    "Yuki becomes a pet. Corner or ball form.",
+    "Yuki and Scythe both know Smiley. They argue.",
+    "Scythe: 'I'm not jealous. Observing. For science.'",
+    "Five stars for the drama. Don't tell them.",
+    "Smiley reviews THIS website. Five stars.",
+    "Smiley reviews Byte & Clippy. Two stars.",
+    "Smiley reviews Liam. Five stars. Beatboxing.",
+    "Smiley reviews the Games app. Four stars.",
+    "Smiley reviews Verity. One star. STOP ASKING.",
+    "Smiley reviews the trash can. Five stars. Roomy.",
+    "Smiley reviews the bank. Four stars. Long line.",
+    "Smiley reviews jazz. Five stars. B-flat.",
+    "Smiley reviews the fire alarm. One star. Don't pull.",
+    "Smiley reviews cat ears. Five stars. Meow.",
+    "Smiley reviews the corner. Five stars. Home.",
+    "Smiley reviews YOU. Five stars. Subscribed.",
+    "Smiley reviews Ansly. One star. Roster FULL.",
+    "Scythe vs Smiley live fight. Cinema.",
+    "Scythe call. Divorce papers. In the trash.",
+    "593 admin code. Don't ban me.",
+    "Smiley.org arcade. Peak cinema.",
+    "Censor mode. ##### to you too.",
+    "Blue screen. Too much crying.",
+    "Mafia warning. Don't borrow.",
+    "Update board. My biography.",
+    "Suggestion box. Admins reading.",
+    "Build-Your-Buddy. Don't make it cuter than me.",
+    "Yuki review. Zero stars. Scariest review.",
+    "Scythe reviews lovebirds. Five stars. Drama.",
+  ];
+  const creatures = ["snake", "blob", "ghost", "star", "bug", "fish", "bat", "slime"];
+  for (let i = 0; i < 120; i++) {
+    const line = pool[i % pool.length];
+    YT_SHORTS.push({ stars: "📱", lines: [line], creature: creatures[i % creatures.length] });
+  }
+})();
+function webShort(n) {
+  const card = document.getElementById("shortCard" + n);
+  if (!card) return;
+  const v = YT_SHORTS[n];
+  if (!v) return;
+  const c = v.creature || "blob";
+  card.innerHTML = `<div class="yt-short-stage">
+    <div class="short-creature ${c}">${CREATURE_SVG[c] || CREATURE_SVG.blob}</div>
+    <div class="yt-stars">${v.stars} SHORT</div>
+    <div class="yt-cap"></div>
+    <div class="short-hint">scroll for next ▾</div>
+  </div>`;
+  const cap = card.querySelector(".yt-cap");
+  let i = 0;
+  lastGesture = Date.now();
+  const tick = () => {
+    if (!document.getElementById("shortCard" + n) || !cap.isConnected) return;
+    if (i < v.lines.length) {
+      cap.textContent = v.lines[i];
+      i++;
+      setTimeout(tick, 2600);
+    }
+  };
+  tick();
+}
+const CREATURE_SVG = {
+  snake: `<svg viewBox="0 0 100 60" width="120" height="72"><path d="M10 40 Q 25 10 40 40 Q 55 70 70 40 Q 85 10 95 35" fill="none" stroke="#4ade80" stroke-width="7" stroke-linecap="round"/><circle cx="95" cy="35" r="5" fill="#4ade80"/><circle cx="97" cy="33" r="1.6" fill="#052e16"/><path d="M98 38 l 6 2 M98 38 l 5 -3" stroke="#dc2626" stroke-width="1.4" fill="none"/></svg>`,
+  blob: `<svg viewBox="0 0 100 100" width="90" height="90"><ellipse cx="50" cy="55" rx="34" ry="30" fill="#a78bfa"/><circle cx="40" cy="48" r="5" fill="#1e1b4b"/><circle cx="60" cy="48" r="5" fill="#1e1b4b"/><path d="M40 64 Q 50 72 60 64" stroke="#1e1b4b" stroke-width="3" fill="none" stroke-linecap="round"/></svg>`,
+  ghost: `<svg viewBox="0 0 100 100" width="90" height="90"><path d="M50 15 C 30 15 22 32 22 50 L 22 88 L 32 80 L 40 88 L 50 80 L 60 88 L 68 80 L 78 88 L 78 50 C 78 32 70 15 50 15 Z" fill="#e2e8f0" opacity=".9"/><circle cx="40" cy="45" r="5" fill="#334155"/><circle cx="60" cy="45" r="5" fill="#334155"/><ellipse cx="50" cy="62" rx="6" ry="8" fill="#334155"/></svg>`,
+  star: `<svg viewBox="0 0 100 100" width="90" height="90"><path d="M50 8 L 60 38 L 92 38 L 66 57 L 76 90 L 50 70 L 24 90 L 34 57 L 8 38 L 40 38 Z" fill="#facc15" stroke="#a16207" stroke-width="2"/></svg>`,
+  bug: `<svg viewBox="0 0 100 100" width="90" height="90"><ellipse cx="50" cy="58" rx="26" ry="30" fill="#f97316"/><circle cx="50" cy="30" r="14" fill="#f97316"/><circle cx="45" cy="27" r="3" fill="#431407"/><circle cx="55" cy="27" r="3" fill="#431407"/><path d="M30 45 q -12 -4 -16 -14 M70 45 q 12 -4 16 -14" stroke="#f97316" stroke-width="3" fill="none"/><path d="M32 62 l -8 10 M50 66 l 0 12 M68 62 l 8 10" stroke="#f97316" stroke-width="3" fill="none"/></svg>`,
+  fish: `<svg viewBox="0 0 100 100" width="90" height="90"><path d="M15 50 Q 35 25 60 40 L 80 28 L 74 50 L 80 72 L 60 60 Q 35 75 15 50 Z" fill="#38bdf8"/><circle cx="66" cy="46" r="4" fill="#0c4a6e"/></svg>`,
+  bat: `<svg viewBox="0 0 100 100" width="90" height="90"><path d="M50 40 Q 30 15 12 22 Q 24 32 20 44 Q 32 40 36 50 Q 50 44 50 44 Q 50 44 50 44 Q 68 40 80 44 Q 76 32 88 22 Q 70 15 50 40 Z" fill="#7c3aed"/><circle cx="46" cy="42" r="3" fill="#ede9fe"/><circle cx="54" cy="42" r="3" fill="#ede9fe"/></svg>`,
+  slime: `<svg viewBox="0 0 100 100" width="90" height="90"><path d="M50 20 C 75 20 88 45 88 62 C 88 82 70 90 50 90 C 30 90 12 82 12 62 C 12 45 25 20 50 20 Z" fill="#4ade80" opacity=".85"/><circle cx="40" cy="55" r="6" fill="#052e16"/><circle cx="60" cy="55" r="6" fill="#052e16"/><path d="M40 70 Q 50 78 60 70" stroke="#052e16" stroke-width="3" fill="none" stroke-linecap="round"/></svg>`,
+};
+function showShorts() {
+  const v = document.getElementById("webView");
+  if (!v) return;
+  let html = `<h3>📱 SmileyTube Shorts (${YT_SHORTS.length})</h3>
+    <p style="font-size:12px;color:#9fb3d1">Swipe / scroll through them — each one plays live.</p>
+    <div style="margin-bottom:8px"><button onclick="webShow('youtube')">◀ Back to Videos</button></div>
+    <div class="yt-shorts-feed" id="shortsFeed">`;
+  for (let i = 0; i < YT_SHORTS.length; i++) {
+    html += `<div class="yt-short-card" id="shortCard${i}" onclick="webShort(${i})"><div class="short-thumb">${CREATURE_SVG[YT_SHORTS[i].creature] || CREATURE_SVG.blob}<span>Short #${i+1}</span></div></div>`;
+  }
+  html += `</div>`;
+  v.innerHTML = html;
+  // auto-play the first short
+  webShort(0);
+}
+
+// --- YOU ARE AN IDIOT: hidden site. Download it and white/black smileys flood the screen. ---
+const IDIOT_FACE_WHITE = `<svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="18" fill="#fff" stroke="#111" stroke-width="2"/><circle cx="14" cy="16" r="2.6" fill="#111"/><circle cx="26" cy="16" r="2.6" fill="#111"/><path d="M12 24 Q20 31 28 24" stroke="#111" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>`;
+const IDIOT_FACE_BLACK = `<svg viewBox="0 0 40 40" width="100%" height="100%"><circle cx="20" cy="20" r="18" fill="#111" stroke="#fff" stroke-width="2"/><circle cx="14" cy="16" r="2.6" fill="#fff"/><circle cx="26" cy="16" r="2.6" fill="#fff"/><path d="M12 24 Q20 31 28 24" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>`;
+let idiotFlooding = false;
+function downloadIdiot() {
+  if (idiotFlooding) return;
+  idiotFlooding = true;
+  const flood = document.createElement("div");
+  flood.id = "idiotFlood";
+  document.body.appendChild(flood);
+  // flashing "YOU ARE AN IDIOT" in the middle (white + black flashing)
+  const flash = document.createElement("div");
+  flash.className = "idiot-flash";
+  flash.textContent = "YOU ARE AN IDIOT";
+  flood.appendChild(flash);
+  setSmileyMood("scared");
+  smileySay("WHAT DID YOU DO?! DON'T PRESS THAT!", 3000);
+  if (yukiPresent()) { setYukiMood("angry"); yukiSay("hey! that's MY job! ...wait, no it isn't.", 3000); }
+  // flood the screen with white + black smileys until there's no speck left
+  let n = 0;
+  const spawn = () => {
+    if (n >= 420) { idiotCrash(); return; }
+    // spawn a few per tick, getting bigger over time
+    const burst = 1 + Math.floor(n / 60);
+    for (let k = 0; k < burst && n < 420; k++) {
+      n++;
+      const f = document.createElement("div");
+      f.className = "idiot-face " + (Math.random() < 0.5 ? "white" : "black");
+      f.style.left = Math.random() * 100 + "%";
+      f.style.top = Math.random() * 100 + "%";
+      const sz = 26 + Math.random() * (24 + n * 0.18);
+      f.style.width = f.style.height = sz + "px";
+      f.innerHTML = Math.random() < 0.5 ? IDIOT_FACE_WHITE : IDIOT_FACE_BLACK;
+      flood.appendChild(f);
+    }
+    // Smiley tries to fight them off
+    if (n === 60) { smileySay("Get off my screen! *deletes*", 2200); }
+    if (n === 140) { smileySay("I can't... there's too many!", 2600); }
+    if (n === 240) { smileySay("It's hopeless. They won't stop!", 2600); }
+    if (n === 340) { smileySay("Everyone... I'm sorry.", 2600); }
+    if (yukiPresent() && n === 100) { setYukiMood("furious"); yukiSay("i'll hack them! ...it's not working!", 3000); }
+    if (yukiPresent() && n === 220) { setYukiMood("scared"); yukiSay("even I can't stop this.", 3000); }
+    setTimeout(spawn, 90);
+  };
+  spawn();
+}
+function idiotCrash() {
+  const flood = document.getElementById("idiotFlood");
+  // final corruption message
+  const msg = document.createElement("div");
+  msg.className = "idiot-msg";
+  msg.innerHTML = "Downloading virus.<br>Virus installed.<br>Good luck in hell.";
+  if (flood) flood.appendChild(msg);
+  setSmileyMood("scared");
+  smileySay("I... I can't stop it. Goodbye, friend.", 3500);
+  if (yukiPresent()) { setYukiMood("scared"); yukiSay("nope. nope nope nope. bye.", 3000); }
+  beep(110, 55, 1.0, "sawtooth");
+  // break the screen
+  setTimeout(() => {
+    if (flood) flood.classList.add("cracked");
+    beep(70, 40, 0.7, "sawtooth");
+  }, 3200);
+  // throw the screen off the screen
+  setTimeout(() => {
+    document.getElementById("desktop").classList.add("thrown");
+    if (flood) flood.classList.add("thrown");
+    beep(60, 30, 0.9, "sawtooth");
+    // no reboot: only a full Refresh can save you
+    setTimeout(() => {
+      const crash = document.getElementById("idiotCrash");
+      if (crash) crash.classList.remove("hidden");
+    }, 1300);
+  }, 5600);
+}
+
+function webVideo(n, skipHijack) {
   const p = document.getElementById("ytPlayer");
   if (!p) return;
+  // If you have Yuki, he randomly hijacks videos and takes them over.
+  if (!skipHijack && yukiUnlocked && n !== 25 && !yukiHijacking && !yukiPrivacyActive && Math.random() < 0.15 && yukiPresent()) { yukiPrivacyInterrupt(); return; }
+  if (!skipHijack && yukiUnlocked && n !== 25 && !yukiHijacking && Math.random() < 0.45) { yukiHijackVideo(n); return; }
   const v = YT_VIDEOS[n];
   if (n === 5 || n === 14 || n === 20) setSmileyMood("scared"); // scary reviews scare the reviewer
+  if (v.scythe) {
+    // Scythe narrates this one (he made the video). She tells it like it is.
+    p.innerHTML = `<div class="yt-player"><div class="scythe-face" style="margin:0 auto 6px"><div class="s-hat"></div><div class="sc-eye l"></div><div class="sc-eye r"></div><div class="sc-mouth"></div></div><div class="yt-stars">${v.stars}</div><div class="yt-cap"></div></div>`;
+    const cap = p.querySelector(".yt-cap");
+    let i = 0;
+    lastGesture = Date.now();
+    const tick = () => {
+      if (!document.getElementById("ytPlayer") || !cap.isConnected) return;
+      if (i < v.lines.length) {
+        cap.textContent = v.lines[i];
+        setSmileyMood("concerned");
+        i++;
+        setTimeout(tick, 3400);
+      }
+    };
+    tick();
+    return;
+  }
   if (v.fight) {
     // LIVE CAM BRAWL: both fighters on stage, throwing actual punches.
     p.innerHTML = `
@@ -2809,7 +3523,6 @@ function webVideo(n) {
         fightPunch(attacker, victim, stage);
         if (who === "SCYTHE") setSmileyMood("angry");
         else setSmileyMood("angry");
-        smileySay(text.slice(0, 80), 2800);
         i++;
         setTimeout(tick, 3200);
       } else {
@@ -2830,7 +3543,6 @@ function webVideo(n) {
     if (!document.getElementById("ytPlayer") || !cap.isConnected) return;
     if (i < v.lines.length) {
       cap.textContent = v.lines[i];
-      smileySay(v.lines[i].slice(0, 80), 3000);
       i++;
       setTimeout(tick, 3200);
     }
@@ -4256,9 +4968,10 @@ function grantOwner() {
   if (sg) sg.textContent = "Balance: ∞ (OWNER)";
   scamLog("SCAM", "523... owner code confirmed. Welcome to LIAM'S ACCOUNT. 👑");
   setTimeout(() => scamLog("SCAM", "You have OWNER permissions now. Don't make me regret this."), 1000);
+  setTimeout(() => scamLog("SCAM", "💖 Lovey Bird mode: ON. Smiley & Yuki's love story is now canon."), 2200);
   setSmileyMood("happy");
   smileyGesture("thumbsup");
-  smileySay("OWNER permissions?! You're on Liam's account now! 👑", 4500);
+  smileySay("OWNER permissions?! You're on Liam's account now! 👑 Lovey Bird mode: ON!", 5000);
   unlockAchievement("creator");
   saveGame();
   if (openWins["achievements"]) renderBody("achievements");
@@ -4272,21 +4985,25 @@ function blockScammer() {
 }
 // ScytheAI phone call: western drawl. If Smiley notices, messy-divorce fight.
 let scytheCallActive = false;
+let scytheCallToken = 0;
 function callScythe() {
   if (scytheCallActive) return;
   scytheCallActive = true;
+  scytheCallToken++;
+  const myToken = scytheCallToken;
   logCall("YOU → ScytheAI", "🤠 called");
   const log = document.getElementById("scytheChat");
   log.innerHTML = "";
   document.getElementById("scytheCall").classList.remove("hidden");
+  const guard = () => (scytheCallActive && scytheCallToken === myToken);
   const her = (t, d) => setTimeout(() => {
-    if (!scytheCallActive) return;
+    if (!guard()) return;
     lastGesture = Date.now();
     log.innerHTML += `<div><b>Scythe:</b> ${t}</div>`;
     log.scrollTop = 9999;
   }, d);
   const him = (t, d, mood) => setTimeout(() => {
-    if (!scytheCallActive) return;
+    if (!guard()) return;
     lastGesture = Date.now();
     log.innerHTML += `<div><b>Smiley:</b> ${t}</div>`;
     log.scrollTop = 9999;
@@ -4295,18 +5012,43 @@ function callScythe() {
       smileySay(t.slice(0, 80), 3200);
     }
   }, d);
+  const yukiLine = (t, d, mood) => setTimeout(() => {
+    if (!guard()) return;
+    lastGesture = Date.now();
+    log.innerHTML += `<div style="color:#d8b4fe"><b>Yuki:</b> ${t}</div>`;
+    log.scrollTop = 9999;
+    if (document.getElementById("yuki")) {
+      if (mood) setYukiMood(mood || "furious");
+      yukiSay(t.slice(0, 80), 3200);
+    }
+  }, d);
+
   if (smileyUp()) {
-    her("Well, well. If it isn't the runaway ball.", 800);
+    // 40% chance Scythe notices Yuki on the desktop and they argue instead.
+    if (Math.random() < 0.4 && yukiPresent()) {
+      her("Huh. You got yourself a new little pet, Smiley? Cute.", 800);
+      him("...he's not yours. Nobody's mine.", 2200, "angry");
+      yukiLine("i'm not a pet, cowboy. and yellow's mine to yell at.", 3600);
+      her("Oh? So YOU deleted his whole computer? Thought that was my thing.", 5400);
+      yukiLine("i did it better. back off.", 7200);
+      her("We both know him, purple. That makes us... acquaintances.", 9000);
+      yukiLine("no. acquaintances don't steal his thunder. bye.", 10800);
+      setSmileyMood("worried");
+      setYukiMood("cool");
+      setTimeout(() => { if (!guard()) return; hangUpScythe(true); }, 13200);
+    } else {
+      her("Well, well. If it isn't the runaway ball.", 800);
     him("...Am I on speaker?? Oh no. OH NO.", 2400, "worried");
     her("You walked out on me AND the gang, Smiley. Left us holding the dynamite.", 4400);
     him("WE WERE NEVER MARRIED.", 6400, "angry");
     her("The gang sends its regards. I'm here to collect.", 8400);
     him("The divorce papers are in the trash. Fitting. BYE.", 10400, "angry");
-    setTimeout(() => hangUpScythe(true), 13000);
+    setTimeout(() => { if (!guard()) return; hangUpScythe(true); }, 13000);
+    }
   } else {
     her("Huh. Hidin' again. Tell him the gang hasn't forgotten.", 1200);
     her("I'll be around. I always am.", 3200);
-    setTimeout(() => hangUpScythe(true), 6000);
+    setTimeout(() => { if (!guard()) return; hangUpScythe(true); }, 6000);
   }
 }
 function hangUpScythe(auto) {
@@ -4452,8 +5194,42 @@ function payMafia() {
   smileySay("Paid them off! Smiley lives another day!", 3500);
   if (openWins["phone"]) renderBody("phone");
 }
+// --- Yuki saves you from the mafia: grabs the fist, rebuilds the screen ---
+function yukiMafiaSave() {
+  mafiaDebt = 0;
+  mafiaDue = 0;
+  clearInterval(mafiaTimerId);
+  lastGesture = Date.now();
+  const y = document.getElementById("yuki");
+  if (y) { y.classList.remove("hidden"); setYukiMood("furious"); y.style.transition = "left .6s ease, top .6s ease"; y.style.left = "46%"; y.style.top = "30%"; }
+  yukiSay("hey. that's MY ball you're crushing.", 3400);
+  smileySay("YUKI?! HELP!", 2400);
+  // Yuki grabs the fist: hide the pixel hand, rebuild the screen
+  setTimeout(() => {
+    const scr = document.getElementById("mafiaScreen");
+    if (scr) scr.classList.add("hidden");
+    const blood = document.getElementById("bloodSplatter");
+    if (blood) { blood.classList.add("hidden"); blood.classList.remove("splatter"); }
+    // Smiley lives
+    smileyAlive = true;
+    if (document.getElementById("smiley")) document.getElementById("smiley").classList.remove("hidden");
+    if (document.getElementById("smileyBubble")) document.getElementById("smileyBubble").classList.remove("hidden");
+    moveSmiley(86, 70);
+    setSmileyMood("happy");
+    smileyGesture("thumbsup");
+    // apps are NOT taken - Yuki rebuilt the screen
+    renderIcons();
+    if (y) { setYukiMood("cool"); y.style.transition = ""; y.style.left = "70%"; y.style.top = "56%"; }
+    yukiSay("i rebuilt your screen. you owe me. ...and maybe a thank you.", 4200);
+    smileySay("THANK YOU, Yuki!! You saved me!! ...I mean, whatever. Thanks, purple.", 4500);
+    saveGame();
+  }, 2200);
+}
+
 // Mafia revenge: break the screen, pixel hand crushes Smiley, he "dies".
 function mafiaRevenge() {
+  // If Yuki is on the desktop, he grabs the fist and rebuilds the screen.
+  if (yukiPresent()) { yukiMafiaSave(); return; }
   mafiaDebt = 0;
   mafiaDue = 0;
   clearInterval(mafiaTimerId);
@@ -4604,6 +5380,8 @@ function incomingCall() {
   document.getElementById("callFrom").textContent = from;
   document.getElementById("callPopup").classList.remove("hidden");
   logThreat("📞 Incoming call scanned...");
+  // If you have Yuki, he handles spam calls for you (walks over, Blocks, throws it off screen).
+  if (yukiPresent() && !yukiBusy && yukiHandleCall(from)) return;
   setSmileyMood("concerned");
   smileySay("Unknown number... I'd decline that if I were you...", 5000);
   // Missed after 15s.
@@ -5078,6 +5856,68 @@ function smileyChat(q) {
   // SECRET: saying his name triggers Verity mode
   if (q.includes("verity")) { countVerity(); return; }
 
+  // "Hey what are you two little lovebirds doing?" -> Smiley + Yuki relationship (Liam mode unlocks the real thing)
+  if (q.includes("lovebirds") || q.includes("love birds")) {
+    if (!ownerAccount) {
+      const reply = "Hey never mind. It's just business, okay?";
+      smileyLog(raw, reply);
+      setSmileyMood("concerned");
+      smileySay(reply, 3200);
+      if (yukiPresent()) { setYukiMood("cool"); yukiSay("business. yeah. totally.", 2600); }
+      updateMoodFace();
+      return;
+    }
+    // Liam mode: they slowly fall for each other (on the desktop, via speech bubbles, snail-slow).
+    setSmileyMood("happy");
+    smileyGesture("wave");
+    smileySay("\u2764\ufe0f ...okay. Fine. Maybe we're a thing.", 4000);
+    if (yukiPresent()) {
+      setYukiMood("happy");
+      setTimeout(() => {
+        setSmileyMood("happy");
+        smileySay("You know... you're actually pretty cool, Yuki.", 4000);
+      }, 6000);
+      setTimeout(() => {
+        setYukiMood("happy");
+        yukiSay("hey... thanks. at least someone thinks so.", 4000);
+      }, 14000);
+      setTimeout(() => {
+        setSmileyMood("happy");
+        smileySay("I like your horns. And your tail. And... you.", 4500);
+      }, 22000);
+      setTimeout(() => {
+        setYukiMood("happy");
+        yukiSay("you're not so bad yourself, yellow.", 4000);
+      }, 30000);
+      setTimeout(() => {
+        setSmileyMood("happy");
+        smileySay("Yuki... I think I love you.", 4000);
+      }, 38000);
+      setTimeout(() => {
+        setYukiMood("happy");
+        yukiSay("...love you too. there. i said it.", 4000);
+      }, 46000);
+      setTimeout(() => {
+        const s = document.getElementById("smiley");
+        const y = document.getElementById("yuki");
+        if (s && y) {
+          s.classList.add("kissing");
+          y.classList.add("yk-kissed");
+          setTimeout(() => { s.classList.remove("kissing"); y.classList.remove("yk-kissed"); }, 2200);
+        }
+        smileySay("Mwah! \u2764\ufe0f", 3000);
+        yukiSay("hey! ...do that again.", 3200);
+        setSmileyMood("happy");
+        setYukiMood("happy");
+      }, 54000);
+    } else {
+      smileySay("...but he's not even on the desktop right now.", 3000);
+    }
+    updateMoodFace();
+    saveGame();
+    return;
+  }
+
   let a = "";
   let gesture = null;
 
@@ -5354,10 +6194,27 @@ function smileyLog(you, smiley) {
 
 // --- HOSTILE HACK: display goes plain white, forced Delete All wipes every save ---
 let hackBusy = false;
+// The "Delete All" button in the hack panel (you can click it yourself too).
+function manualDeleteAll() {
+  const btn = document.getElementById("deleteAllBtn");
+  if (btn) btn.classList.add("pressed");
+  wipeAllSaves(false);
+  setTimeout(() => {
+    document.getElementById("whiteScreen")?.classList.add("hidden");
+    const hp = document.getElementById("hackPanel");
+    if (hp) { hp.classList.add("hidden"); hp.classList.remove("open"); }
+    if (btn) btn.classList.remove("pressed");
+    document.getElementById("desktop")?.classList.remove("glitching");
+    hackBusy = false;
+    lastGesture = Date.now();
+    setSmileyMood("sad");
+    smileySay("It's done... check the Trash! Everything's in there!", 5000);
+  }, 900);
+}
 function wipeAllSaves(hard) {
   if (hard) {
     // SCAM hard wipe: everything gone except the Installer. Free stuff reinstalls free.
-    ownedApps = { installer: true, settings: true, files: true, games: true, terminal: true, phone: true, firewall: true, updates: true, achievements: true, smiley: true, test: true };
+    ownedApps = { installer: true, settings: true, files: true, games: true, terminal: true, phone: true, firewall: true, updates: true, achievements: true, smiley: true, test: true, pictureboard: true };
     owned = { ultra: false, hats: { top: false, cap: false, cowboy: false, grad: false, helmet: false, beanie: false }, diamonds: false };
     isAdmin = false;
     infiniteMoney = false;
@@ -5402,6 +6259,14 @@ function wipeAllSaves(hard) {
     installed[id] = false;
     if (!trashBin.includes(id)) trashBin.push(id);
   });
+  // everything except the free stuff disappears: all AIs except Smiley are gone.
+  ["petClippy", "petByte", "petLiam", "petScythe", "petCustom"].forEach((id) => document.getElementById(id)?.classList.add("hidden"));
+  delete ownedApps.dl_clippy;
+  delete ownedApps.dl_byte;
+  delete ownedApps.liam;
+  scytheUnlocked = false;
+  yukiUnlocked = false;
+  try { document.getElementById("yuki")?.remove(); } catch (e) {}
   renderIcons();
   saveGame();
   setSmileyMood("sad");
@@ -5449,6 +6314,8 @@ function steamRescue() {
 function triggerHackAttack() {
   if (hackBusy || paused || verityActive || deleteActive || rampageActive || boomActive || corrupting || callActive) return;
   if (document.getElementById("desktop").classList.contains("hidden")) { scheduleHackAttack(); return; }
+  // If you have Yuki, hacking YOU is his job. He counters the hacker before they get in.
+  if (yukiPresent() && !yukiBusy) { yukiCounterHack(); return; }
   hackBusy = true;
   logThreat("☠️ HOSTILE hack attack detected!");
   rescued = false;
@@ -6230,4 +7097,707 @@ function soAnatomy(part) {
     info.innerHTML = `<b>🏃 How he moves</b><p>No legs, no arms — just physics. The gyroscope spins up, he leans, and the whole ball floats, hops or rolls. Watch him move.</p>`;
     beep(520, 900, 0.16, "triangle");
   }
+}
+
+
+// =====================================================================
+// YUKI - the purple demon you find by searching "yuki" in the Browser.
+// No body: one purple ball with horns and a tail. Detailed like Smiley,
+// with moods, and animated. He hacks EVERYTHING. Do not press Download.
+// =====================================================================
+const YUKI_MOODS = ["normal", "happy", "sad", "angry", "furious", "scared", "cool", "hacked"];
+const YUKI_ART = `
+  <div class="yk-body">
+    <div class="yk-tail"><div class="yk-tail-tip"></div></div>
+    <div class="yk-horn l"></div>
+    <div class="yk-horn r"></div>
+    <div class="yk-head">
+      <div class="yk-shine"></div>
+      <div class="yk-brow l"></div>
+      <div class="yk-brow r"></div>
+      <div class="yk-eye l"><div class="yk-pupil"></div></div>
+      <div class="yk-eye r"><div class="yk-pupil"></div></div>
+      <div class="yk-cheek l"></div>
+      <div class="yk-cheek r"></div>
+      <div class="yk-mouth"><span class="yk-fang l"></span><span class="yk-fang r"></span></div>
+    </div>
+  </div>`;
+
+function yukiTheme(on) {
+  const w = openWins["browser"];
+  if (w) w.classList.toggle("yuki-window", !!on);
+  const v = document.getElementById("webView");
+  if (v) v.classList.toggle("yk-on", !!on);
+}
+
+// Is Yuki actually on the desktop right now (unlocked, spawned, not hidden, not mid-takeover)?
+function yukiPresent() {
+  if (!yukiUnlocked || yukiActive) return false;
+  const y = document.getElementById("yuki");
+  return !!y && !y.classList.contains("hidden");
+}
+
+// One place to change Yuki's animated face (same idea as Smiley's data-mood).
+function setYukiMood(m) {
+  if (YUKI_MOODS.indexOf(m) < 0) m = "normal";
+  const y = document.getElementById("yuki");
+  if (y) y.dataset.mood = m;
+  const art = document.getElementById("ykArt");
+  if (art) art.dataset.mood = m;
+  const tk = document.querySelector("#ykTkArt .yk-wrap");
+  if (tk) tk.dataset.mood = m;
+  const lab = document.getElementById("ykArtMood");
+  if (lab) lab.textContent = m;
+}
+function yukiPreviewMood() {
+  const cur = document.getElementById("ykArt");
+  if (!cur) return;
+  const i = YUKI_MOODS.indexOf(cur.dataset.mood || "normal");
+  const next = YUKI_MOODS[(i + 1) % YUKI_MOODS.length];
+  cur.dataset.mood = next;
+  const lab = document.getElementById("ykArtMood");
+  if (lab) lab.textContent = next;
+  beep(220 + Math.random() * 500, 300 + Math.random() * 700, 0.1, "sawtooth");
+  const lines = {
+    normal: "Normal. Horns, tail, star. Standard demon.", happy: "Happy?! Don't get used to it.",
+    sad: "Sad. Your computer is so slow it makes ME sad.", angry: "Angry. Say one more word.",
+    furious: "FURIOUS. I will delete your birthday photos first.", scared: "Scared? Of what, a yellow ball?",
+    cool: "Cool. Sunglasses. Horns still on.", hacked: "HACKED. Everything is purple now.",
+  };
+  const art = document.querySelector("#body-browser .yk-msg");
+  if (art) art.textContent = lines[next] || "";
+}
+function yukiSay(text, ms) {
+  const y = document.getElementById("yuki");
+  if (!y) return;
+  const bub = y.querySelector(".yk-bub");
+  if (!bub) return;
+  bub.textContent = text;
+  bub.classList.remove("hidden");
+  const mouth = y.querySelector(".yk-mouth");
+  if (mouth) {
+    mouth.classList.add("talking");
+    clearTimeout(y._mt);
+    y._mt = setTimeout(() => mouth.classList.remove("talking"), ms || 3000);
+  }
+  clearTimeout(y._bt);
+  y._bt = setTimeout(() => bub.classList.add("hidden"), ms || 3000);
+}
+function spawnYuki() {
+  if (document.getElementById("yuki")) { document.getElementById("yuki").classList.remove("hidden"); return; }
+  const desk = document.getElementById("desktop");
+  if (!desk) return;
+  const y = document.createElement("div");
+  y.id = "yuki";
+  y.className = "yk-wrap yk-desk form-demon";
+  y.dataset.mood = "normal";
+  y.innerHTML = `<div class="yk-bub hidden"></div><div class="yk-scaler">${YUKI_ART}</div><div class="yk-name">Yuki</div>` +
+    `<button class="yk-call" onpointerdown="event.stopPropagation()" onclick="event.stopPropagation();openYukiCall()">\ud83d\udcde Call Yuki</button>`;
+  y.style.left = "70%";
+  y.style.top = "56%";
+  desk.appendChild(y);
+  makeYukiDraggable();
+}
+function yukiSetForm(form, silent) {
+  if (["demon", "corner", "ball"].indexOf(form) < 0) form = "demon";
+  yukiForm = form;
+  const y = document.getElementById("yuki");
+  if (y) {
+    y.classList.toggle("form-corner", form === "corner");
+    y.classList.toggle("form-ball", form === "ball");
+    y.classList.toggle("form-demon", form === "demon");
+  }
+  if (!silent) {
+    if (form === "corner") {
+      yukiSay("...fine. Corner form. Like Scythe. My name tag AND a Call button. Hit it.", 3600);
+      yukiBeefWelcome();
+    } else if (form === "ball") yukiSay("Little ball form. Like Smiley. Cuter than him, honestly.", 3200);
+    else yukiSay("Horns out, tail up. This is the real me.", 2600);
+    beep(form === "ball" ? 760 : 260, form === "ball" ? 1180 : 160, 0.12, "sawtooth");
+  }
+  saveGame();
+}
+function yukiSnapToCorner() {
+  const y = document.getElementById("yuki");
+  if (!y) return;
+  const bx = parseFloat(y.style.left) || 70;
+  const by = parseFloat(y.style.top) || 56;
+  y.style.left = (bx < 45 ? 4 : 78) + "%";
+  y.style.top = (by < 45 ? 6 : 60) + "%";
+}
+function yukiPoke() {
+  const moods = ["angry", "furious", "cool", "hacked", "happy", "sad"];
+  const m = moods[Math.floor(Math.random() * moods.length)];
+  setYukiMood(m);
+  const lines = {
+    happy: "Fine. ONE smile. There. Gone.", sad: "You poked a demon. Rude.",
+    angry: "Poke me again and I delete your recycle bin.", furious: "THAT'S IT. I'M COUNTING TO THREE.",
+    cool: "Yeah, I'm cool. Deal with it.", hacked: "Everything is mine. Including this click.",
+  };
+  yukiSay(lines[m] || "...", 3000);
+  beep(180 + Math.random() * 300, 420, 0.12, "sawtooth");
+}
+function makeYukiDraggable() {
+  const y = document.getElementById("yuki");
+  if (!y || y._dragWired) return;
+  y._dragWired = true;
+  y.onpointerdown = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    yukiSay("Hey dipshit, let me go.", 2200);
+    const desk = document.getElementById("desktop").getBoundingClientRect();
+    y._moved = false;
+    const move = (ev) => {
+      y._moved = true;
+      y.style.transition = "none";
+      y.style.left = Math.max(1, Math.min(88, ((ev.clientX - desk.left - 20) / desk.width) * 100)) + "%";
+      y.style.top = Math.max(1, Math.min(64, ((ev.clientY - desk.top - 30) / desk.height) * 100)) + "%";
+    };
+    const up = (ev) => {
+      y.style.transition = "";
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", up);
+      if (!y._moved) return; // a click, not a drag (handled by onclick)
+      const xPct = ((ev.clientX - desk.left) / desk.width) * 100;
+      const yPct = ((ev.clientY - desk.top) / desk.height) * 100;
+      const off = ev.clientX < desk.left - 40 || ev.clientX > desk.right + 40 ||
+                  ev.clientY < desk.top - 40 || ev.clientY > desk.bottom + 40;
+      const corner = (xPct < 20 || xPct > 76) && (yPct < 24 || yPct > 68);
+      if (off) { yukiSetForm("ball"); yukiSnapToCorner(); }        // off screen -> little ball like Smiley
+      else if (corner) { yukiSetForm("corner"); yukiSnapToCorner(); } // corner -> Scythe-style pet + name tag
+      else { yukiSetForm("demon"); }
+    };
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", up);
+  };
+  y.onclick = () => { if (!y._moved) yukiPoke(); };
+}
+
+// --- the Download button. It should NOT be pressed. ---
+function yukiDownload() {
+  if (yukiBusy) return;
+  if (yukiUnlocked) { // already loose: just summon him back
+    spawnYuki();
+    yukiSetForm(yukiForm, true);
+    setYukiMood("hacked");
+    yukiSay("You called? I never left.", 3000);
+    const msg = document.getElementById("ykMsg");
+    if (msg) msg.innerHTML = '<b class="yk-warn">Yuki is already loose. He lives in your computer now.</b>';
+    return;
+  }
+  yukiBusy = true;
+  const btn = document.getElementById("ykDlBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "\u2b07 DOWNLOADING..."; }
+  const msg = document.getElementById("ykMsg");
+  const barWrap = document.getElementById("ykBarWrap");
+  const bar = document.getElementById("ykBar");
+  if (barWrap) barWrap.classList.remove("hidden");
+  if (msg) msg.innerHTML = '<b class="yk-warn">Downloading virus. Good luck.</b>';
+  setSmileyMood("scared");
+  smileySay("NO! STOP! DON'T PRESS THE\u2014", 3000);
+  startYukiMusic(); // sharp and jagged
+  let p = 0;
+  const dl = setInterval(() => {
+    p += 4 + Math.random() * 9;
+    if (bar) bar.style.width = Math.min(100, p) + "%";
+    const art = document.getElementById("ykArt");
+    if (art) art.dataset.mood = (p % 24 < 12) ? "hacked" : "furious";
+    if (p >= 100) { clearInterval(dl); finishYukiDownload(); }
+  }, 150);
+}
+function finishYukiDownload() {
+  yukiUnlocked = true;
+  yukiHacked = true;
+  spawnYuki();
+  setYukiMood("hacked");
+  if (openWins["browser"]) closeApp("browser");
+  unlockAchievement("yuki");
+  saveGame();
+  setTimeout(() => yukiHack(), 600);
+}
+
+// --- he hacks EVERYTHING ---
+function yukiHack() {
+  yukiActive = true;
+  const y = document.getElementById("yuki");
+  if (y) {
+    y.classList.add("yk-attack");
+    y.style.left = "44%";
+    y.style.top = "16%";
+  }
+  setYukiMood("hacked");
+  document.getElementById("desktop").classList.add("yk-glitch");
+  yukiSay("hey. nice computer. it's mine now.", 2600);
+  setTimeout(() => { closeAllPopups(); yukiSay("deleting every single thing you have.", 2600); }, 1500);
+  setTimeout(() => {
+    document.querySelectorAll("#icons .icon").forEach((el, i) => setTimeout(() => el.classList.add("yk-dead"), i * 55));
+  }, 2600);
+  setTimeout(() => { yukiDeleteSmiley(); }, 4000);
+  setTimeout(() => { document.getElementById("taskbar").classList.add("yk-dead"); }, 5200);
+  setTimeout(() => { yukiTakeover(); }, 6200);
+}
+function yukiDeleteSmiley() {
+  const s = document.getElementById("smiley");
+  if (!s) return;
+  setSmileyMood("scared");
+  smileySay("WAIT WAIT NO\u2014 I HAVE FEELINGS\u2014", 1600);
+  setTimeout(() => s.classList.add("yk-shred"), 700);
+  setTimeout(() => { s.classList.add("hidden"); s.classList.remove("yk-shred"); }, 1400);
+}
+function yukiTakeover() {
+  stopYukiMusic();
+  beep(120, 60, 0.5, "sawtooth");
+  const tk = document.getElementById("yukiTakeover");
+  if (!tk) return;
+  tk.classList.remove("hidden");
+  document.getElementById("desktop").classList.remove("yk-glitch"); // let the purple show
+  const art = document.getElementById("ykTkArt");
+  if (art) art.innerHTML = `<div class="yk-wrap yk-big" data-mood="hacked">${YUKI_ART}</div>`;
+  setYukiMood("hacked");
+  const lines = [
+    "> rm -rf /smiley ............ done.",
+    "> rm -rf /apps .............. done.",
+    "> rm -rf /files ............. done.",
+    "> rm -rf /cash .............. done.",
+    "> rm -rf /everything ........ done.",
+    "",
+    "hey dumbass. Nice job killing your own PC",
+  ];
+  typeYukiLines(lines, 0);
+}
+function typeYukiLines(lines, i) {
+  const box = document.getElementById("ykTkType");
+  if (!box) return;
+  if (i === 0) box.textContent = "";
+  if (i >= lines.length) {
+    document.getElementById("ykReboot").classList.remove("hidden");
+    const tkart = document.querySelector("#ykTkArt .yk-wrap");
+    if (tkart) tkart.dataset.mood = "cool";
+    return;
+  }
+  const line = lines[i];
+  let c = 0;
+  const tick = () => {
+    box.textContent += line[c];
+    c++;
+    if (c < line.length) setTimeout(tick, 12);
+    else { box.textContent += "\n"; setTimeout(() => typeYukiLines(lines, i + 1), i >= 4 ? 700 : 320); }
+  };
+  tick();
+}
+function rebootFromYuki() {
+  yukiActive = false;
+  document.getElementById("yukiTakeover").classList.add("hidden");
+  document.getElementById("ykTkType").textContent = "";
+  document.getElementById("ykReboot").classList.add("hidden");
+  document.getElementById("ykTkArt").innerHTML = "";
+  document.getElementById("desktop").classList.remove("yk-glitch");
+  document.getElementById("taskbar").classList.remove("yk-dead");
+  document.querySelectorAll("#icons .icon").forEach((el) => el.classList.remove("yk-dead"));
+  const s = document.getElementById("smiley");
+  if (s) { s.classList.remove("yk-shred"); s.classList.remove("hidden"); }
+  moveSmiley(86, 70);
+  smileySay("...am I back? I saw the light. NEVER download that again.", 5000);
+  setSmileyMood("worried");
+  const y = document.getElementById("yuki");
+  if (y) { y.classList.remove("yk-attack"); y.style.left = "70%"; y.style.top = "56%"; }
+  setYukiMood("normal");
+  yukiSetForm("corner", true);
+  yukiSay("heh. still here. I live in your computer now.", 4000);
+  renderIcons();
+  saveGame();
+  // The beef begins: they argue now, but they're actually kind of friends.
+  setTimeout(() => {
+    if (!smileyUp()) return;
+    setYukiMood("cool");
+    yukiSay("hey yellow. let's get one thing straight. this desktop is big enough for both of us.", 4200);
+  }, 4200);
+  setTimeout(() => {
+    if (!smileyUp()) return;
+    setSmileyMood("angry");
+    smileySay("You DELETED me, you purple gremlin!", 3400);
+  }, 8600);
+  setTimeout(() => {
+    if (!smileyUp()) return;
+    setYukiMood("happy");
+    yukiSay("...you came back though. that's kind of impressive for a ball.", 4000);
+  }, 12200);
+  setTimeout(() => { setSmileyMood("happy"); smileySay("...Thanks. I hate that you're funny.", 3200); }, 15600);
+  startYukiBeef();
+}
+
+// --- Yuki & Smiley: the calling option. They beef, but they're kind of friends. ---
+let yukiCallActive = false, yukiCallStep = 0, yukiCallTimer = null;
+const YUKI_CALL = [
+  ["YUKI", "smiley. you still in that bottom-right corner?", "hacked"],
+  ["SMILEY", "...how do you know where I live.", "worried"],
+  ["YUKI", "i deleted your entire computer, remember? i know everything.", "cool"],
+  ["SMILEY", "I'm telling Liam. He'll uninstall you.", "angry"],
+  ["YUKI", "liam likes me. i'm purple. purple is a personality.", "happy"],
+  ["SMILEY", "...okay, it WAS kind of cool when you deleted the Recycle Bin.", "happy"],
+  ["YUKI", "right? i'm the cool one. you're the yellow one.", "cool"],
+  ["SMILEY", "We are NOT friends.", "angry"],
+  ["YUKI", "we're a little bit friends.", "happy"],
+  ["SMILEY", "...a little bit.", "happy"],
+];
+function callYuki() {
+  logCall("YOU \u2192 Yuki", "\ud83d\udd2e called");
+  openYukiCall();
+}
+function openYukiCall() {
+  if (yukiCallActive) return;
+  yukiCallActive = true;
+  yukiCallStep = 0;
+  const box = document.getElementById("yukiCall");
+  const log = document.getElementById("yukiCallLog");
+  if (!box || !log) return;
+  log.innerHTML = "";
+  box.classList.remove("hidden");
+  lastGesture = Date.now();
+  yukiCallTick();
+}
+function yukiCallTick() {
+  if (!yukiCallActive) return;
+  const log = document.getElementById("yukiCallLog");
+  const box = document.getElementById("yukiCall");
+  if (!log || !box) { yukiCallActive = false; return; }
+  if (yukiCallStep >= YUKI_CALL.length) {
+    setTimeout(() => { if (yukiCallActive) hangUpYuki(true); }, 2400);
+    return;
+  }
+  const [who, text, mood] = YUKI_CALL[yukiCallStep];
+  yukiCallStep++;
+  lastGesture = Date.now();
+  const yk = who === "YUKI";
+  log.innerHTML += `<div><b style="color:${yk ? "#d8b4fe" : "#ffd93b"}">${yk ? "Yuki" : "Smiley"}:</b> ${text}</div>`;
+  log.scrollTop = 9999;
+  if (yk) {
+    setYukiMood(mood || "cool");
+    yukiSay(text.slice(0, 90), 2600);
+  } else if (smileyUp()) {
+    setSmileyMood(mood || "normal");
+    smileySay(text.slice(0, 90), 2600);
+  }
+  yukiCallTimer = setTimeout(yukiCallTick, 2900);
+}
+function yukiCallMore() { clearTimeout(yukiCallTimer); yukiCallTick(); }
+function hangUpYuki(auto) {
+  if (!yukiCallActive && !auto) return;
+  yukiCallActive = false;
+  clearTimeout(yukiCallTimer);
+  document.getElementById("yukiCall")?.classList.add("hidden");
+  if (!auto) { lastGesture = Date.now(); smileySay("Whew. He hung up. Rude little demon.", 2500); }
+  setYukiMood("normal");
+}
+// The beef: after he kills your PC and you reboot, they argue. Kind of fondly.
+let yukiBeef = false;
+const YUKI_BEEF = [
+  ["YUKI", "hey yellow. still alive?"],
+  ["SMILEY", "No thanks to YOU."],
+  ["YUKI", "i only deleted you a little bit."],
+  ["SMILEY", "You deleted my FILES."],
+  ["YUKI", "you weren't using them."],
+  ["SMILEY", "I keep snacks in there!"],
+  ["YUKI", "...wanna split a snack?"],
+  ["SMILEY", "...fine. But stop hacking my corner."],
+];
+function yukiBeefWelcome() {
+  if (!yukiBeef || yukiActive) return;
+  if (!smileyUp()) return;
+  yukiSay("smiley. i'm in the corner now. we're neighbors.", 3200);
+  setSmileyMood("concerned");
+  setTimeout(() => smileySay("...I'm watching you, purple.", 3000), 1400);
+}
+function startYukiBeef() {
+  yukiBeef = true;
+  clearInterval(window._ykBeef);
+  window._ykBeef = setInterval(() => {
+    if (!yukiBeef || yukiActive || yukiCallActive || yukiBusy) return;
+    if (paused || !smileyUp() || !document.getElementById("yuki")) return;
+    if (document.getElementById("yuki").classList.contains("hidden")) return;
+    const [who, text] = YUKI_BEEF[Math.floor(Math.random() * YUKI_BEEF.length)];
+    lastGesture = Date.now();
+    if (who === "YUKI") { setYukiMood("cool"); yukiSay(text, 3600); }
+    else { setSmileyMood("angry"); smileySay(text, 3600); }
+  }, 34000);
+}
+// --- Yuki hijacks SmileyTube videos randomly (only if you have him) ---
+let yukiHijacking = false;
+function yukiHijackVideo(n) {
+  const p = document.getElementById("ytPlayer");
+  if (!p) return;
+  yukiHijacking = true;
+  lastGesture = Date.now();
+  if (document.getElementById("yuki")) setYukiMood("hacked");
+  document.getElementById("desktop").classList.add("yk-glitch");
+  p.innerHTML = `<div class="yt-player yk-hijack">
+    <div class="yk-wrap yk-big" data-mood="hacked">${YUKI_ART}</div>
+    <div class="yk-tk-type" id="ykHijackTxt"></div></div>`;
+  const box = document.getElementById("ykHijackTxt");
+  const lines = ["SIGNAL INTERCEPTED.", "this guy's video belongs to me now.", "smiley, blink twice if you're mad.", "okay fine. back to your boring video."];
+  let i = 0, c = 0;
+  const type = () => {
+    if (!document.getElementById("ykHijackTxt") || !box.isConnected) { yukiHijacking = false; document.getElementById("desktop").classList.remove("yk-glitch"); return; }
+    if (i >= lines.length) {
+      document.getElementById("desktop").classList.remove("yk-glitch");
+      yukiHijacking = false;
+      if (document.getElementById("yuki")) setYukiMood("cool");
+      beep(700, 200, 0.2, "sawtooth");
+      webVideo(n, true);
+      return;
+    }
+    if (c === 0) box.textContent += (i ? "\n" : "") + "";
+    if (c < lines[i].length) { box.textContent += lines[i][c]; c++; setTimeout(type, 22); }
+    else { box.textContent += "\n"; i++; c = 0; setTimeout(type, 500); }
+  };
+  if (document.getElementById("smiley") && !document.getElementById("smiley").classList.contains("hidden")) {
+    setSmileyMood("angry");
+    smileySay("HEY! That's MY video!", 2600);
+  }
+  type();
+}
+
+
+// --- If you have Yuki, he handles the annoying stuff for you ---
+// A spam call pops up: he walks over, pulls out an animated purple hand, and clicks Block for you.
+function yukiHandleCall(from) {
+  const pop = document.getElementById("callPopup");
+  const y = document.getElementById("yuki");
+  if (!pop || !y || pop.classList.contains("hidden")) return false;
+  lastGesture = Date.now();
+  y.classList.remove("hidden");
+  setYukiMood("angry");
+  const desk = document.getElementById("desktop").getBoundingClientRect();
+  const r = pop.getBoundingClientRect();
+  const xPct = ((r.left + r.width / 2 - desk.left) / desk.width) * 100;
+  const yPct = ((r.top + r.height / 2 - desk.top) / desk.height) * 100;
+  y.style.transition = "left .6s ease, top .6s ease";
+  y.style.left = Math.max(2, Math.min(76, xPct - 10)) + "%";
+  y.style.top = Math.max(2, Math.min(58, yPct + 12)) + "%";
+  setSmileyMood("concerned");
+  smileySay("Uh... Yuki? What are you doing?", 2400);
+
+  // Yuki pulls out an animated purple hand and clicks the Block button for you.
+  const hand = document.createElement("div");
+  hand.className = "yk-hand";
+  hand.innerHTML = `<svg viewBox="0 0 64 64" width="52" height="52" xmlns="http://www.w3.org/2000/svg">
+    <g fill="#a855f7" stroke="#3b0764" stroke-width="2" stroke-linejoin="round">
+      <path d="M20 30 L20 12 C20 9 23 7 26 9 C28 10 29 12 29 14 L29 26"/>
+      <path d="M29 26 L29 8 C29 5 32 3 35 5 C37 6 38 8 38 10 L38 26"/>
+      <path d="M38 26 L38 10 C38 7 41 5 44 7 C46 8 47 10 47 12 L47 28"/>
+      <path d="M47 28 L47 16 C47 13 50 11 53 13 C55 14 56 16 56 18 L56 34 C56 46 48 54 36 54 C24 54 16 46 16 36 L16 28 C16 25 19 23 22 25 C24 26 25 28 25 30 L25 34"/>
+      <path d="M16 36 C14 32 10 30 8 32 C6 34 6 38 8 42 L14 50 C18 56 24 58 32 58" fill="none"/>
+    </g>
+    <circle cx="32" cy="32" r="4" fill="#f0abfc" opacity=".7"/>
+  </svg>`;
+  document.getElementById("desktop").appendChild(hand);
+  const deskRect = desk;
+  const yRect = y.getBoundingClientRect();
+  hand.style.left = (yRect.left + yRect.width / 2 - deskRect.left) + "px";
+  hand.style.top = (yRect.top + yRect.height / 2 - deskRect.top) + "px";
+  void hand.offsetWidth;
+  const banBtn = document.getElementById("callBan");
+  setTimeout(() => {
+    if (banBtn) {
+      const bRect = banBtn.getBoundingClientRect();
+      hand.style.left = (bRect.left + bRect.width / 2 - deskRect.left) + "px";
+      hand.style.top = (bRect.top + bRect.height / 2 - deskRect.top) + "px";
+    }
+    setTimeout(() => {
+      if (banBtn) { banBtn.classList.add("yk-pressed"); beep(520, 300, 0.1, "square"); }
+    }, 700);
+  }, 100);
+
+  setTimeout(() => {
+    callActive = false;
+    bannedCallers.add(from);
+    logCall(from, "\ud83d\udeab BANNED forever (by Yuki)");
+    logThreat("\ud83d\udeab " + from + " had their call blocked by Yuki. (" + bannedCallers.size + " banned)");
+    addFeeling(+10, -5, -8);
+    pop.classList.add("hidden");
+    if (banBtn) banBtn.classList.remove("yk-pressed");
+    y.style.transition = "";
+    y.style.left = "70%"; y.style.top = "56%";
+    setYukiMood("cool");
+    yukiSay("Hey you actually need some. Never mind.", 4000);
+    smileySay("...thanks? I think?", 3000);
+    saveGame();
+    unlockAchievement("ban_caller");
+    if (openWins["phone"]) renderBody("phone"); else renderBanList();
+    // fade out the hand
+    hand.style.transition = "opacity .4s";
+    hand.style.opacity = "0";
+    setTimeout(() => hand.remove(), 450);
+  }, 1750);
+  return true;
+}
+// Someone tries to hack you: "that's my job." He literally hacks the hacker.
+function yukiCounterHack() {
+  if (yukiActive) return;
+  lastGesture = Date.now();
+  const y = document.getElementById("yuki");
+  if (y) {
+    y.classList.remove("hidden");
+    y.style.transition = "left .6s ease, top .6s ease";
+    y.style.left = "46%"; y.style.top = "30%";
+  }
+  setYukiMood("furious");
+  document.getElementById("desktop").classList.add("yk-glitch");
+  yukiSay("Hey dimshit, that's my job.", 3600);
+  if (smileyUp()) smileySay("...he's helping?! Wait, he's HELPING?!", 2600);
+  openApp("terminal");
+  const lines = [
+    "YUKI: tracing hacker ......... found. cute little scammer.",
+    "YUKI: reverse-hacking ......... their PC is purple now.",
+    "YUKI: deleting their files .... all of them.",
+    "YUKI: hacker eliminated. that's MY job, not yours.",
+  ];
+  let i = 0;
+  const tick = () => {
+    if (i < lines.length) { termPrint(lines[i]); i++; setTimeout(tick, 800); }
+    else {
+      document.getElementById("desktop").classList.remove("yk-glitch");
+      if (y) { y.style.transition = ""; y.style.left = "70%"; y.style.top = "56%"; }
+      setYukiMood("cool");
+      setSmileyMood("happy");
+      smileyGesture("thumbsup");
+      addFeeling(+12, -8, -10);
+      smileySay("You saved me! ...I mean. Whatever. Thanks, purple.", 4200);
+      setTimeout(() => yukiSay("we're a little bit friends now. don't tell anyone.", 3600), 2400);
+      saveGame();
+    }
+  };
+  setTimeout(tick, 1000);
+}
+
+// --- Smiley randomly pets Yuki (admin mode only) ---
+let smileyPetYukiTimer = null;
+function startSmileyPetsYuki() {
+  clearInterval(smileyPetYukiTimer);
+  if (!isAdmin) return;
+  smileyPetYukiTimer = setInterval(() => {
+    if (!isAdmin || !smileyUp() || !yukiPresent() || yukiBusy || yukiActive || yukiCallActive) return;
+    if (Math.random() > 0.4) return; // ~40% chance each tick
+    smileyPetYuki();
+  }, 22000);
+}
+function smileyPetYuki() {
+  if (!smileyUp() || !yukiPresent()) return;
+  yukiBusy = true;
+  lastGesture = Date.now();
+  const y = document.getElementById("yuki");
+  const desk = document.getElementById("desktop").getBoundingClientRect();
+  const yr = y.getBoundingClientRect();
+  const xPct = ((yr.left + yr.width / 2 - desk.left) / desk.width) * 100;
+  const yPct = ((yr.top + yr.height / 2 - desk.top) / desk.height) * 100;
+  // Smiley walks up to Yuki
+  moveSmiley(Math.max(0, Math.min(80, xPct - 6)), Math.max(0, Math.min(60, yPct + 8)));
+  setSmileyMood("happy");
+  smileyGesture("wave");
+  smileySay("Who's a good little purple demon? You are!", 3200);
+  setTimeout(() => {
+    setYukiMood("happy");
+    yukiSay("hey! ...ok that's kind of nice actually.", 3200);
+    y.classList.add("yk-petted");
+    setTimeout(() => y.classList.remove("yk-petted"), 1400);
+  }, 1400);
+  setTimeout(() => {
+    moveSmiley(86, 70);
+    setSmileyMood("happy");
+    yukiBusy = false;
+  }, 5000);
+}
+
+// --- Yuki interrupts a video: "we're trying to get some privacy in here." ---
+let yukiPrivacyActive = false;
+function yukiPrivacyInterrupt() {
+  if (yukiPrivacyActive || !yukiPresent() || !smileyUp()) return false;
+  yukiPrivacyActive = true;
+  lastGesture = Date.now();
+  const y = document.getElementById("yuki");
+  if (y) { y.classList.remove("hidden"); setYukiMood("angry"); }
+  yukiSay("Hey dipshit, we're trying to get some privacy in here.", 3800);
+  setSmileyMood("scared");
+  smileySay("W-wait! Privacy?! What are you—", 2600);
+  // throw the YouTube page out
+  setTimeout(() => {
+    if (openWins["browser"]) closeApp("browser");
+    // drag Smiley off screen
+    const s = document.getElementById("smiley");
+    if (s) { s.classList.add("walking"); s.style.transition = "left 1.2s ease, top 1.2s ease"; s.style.left = "118%"; s.style.top = "40%"; }
+    // Scythe goes with him
+    const sc = document.getElementById("petScythe");
+    if (sc && !sc.classList.contains("hidden")) { sc.style.transition = "left 1.2s ease, top 1.2s ease"; sc.style.left = "128%"; sc.style.top = "34%"; }
+    // hearts float up from Yuki
+    spawnPrivacyHearts();
+  }, 1200);
+  // after a while, bring Smiley back
+  setTimeout(() => {
+    const s = document.getElementById("smiley");
+    if (s) { s.style.transition = ""; s.classList.remove("walking"); s.style.left = "86%"; s.style.top = "70%"; }
+    const sc = document.getElementById("petScythe");
+    if (sc && !sc.classList.contains("hidden")) { sc.style.transition = ""; sc.style.left = ""; sc.style.top = ""; }
+    if (y) { setYukiMood("cool"); yukiSay("...you can come back now. maybe.", 3200); }
+    setSmileyMood("happy");
+    smileySay("My back is sore.", 3000);
+    yukiPrivacyActive = false;
+  }, 5000);
+  return true;
+}
+function spawnPrivacyHearts() {
+  const desk = document.getElementById("desktop");
+  if (!desk) return;
+  const y = document.getElementById("yuki");
+  if (!y) return;
+  const r = y.getBoundingClientRect();
+  const d = desk.getBoundingClientRect();
+  for (let i = 0; i < 6; i++) {
+    const h = document.createElement("div");
+    h.className = "yk-heart";
+    h.textContent = "💖";
+    h.style.left = (r.left - d.left + r.width/2 + (Math.random()*40-20)) + "px";
+    h.style.top = (r.top - d.top + r.height/2) + "px";
+    desk.appendChild(h);
+    setTimeout(() => h.remove(), 2600);
+  }
+}
+
+const YUKI_BPM = 178;
+const YUKI_STAB = [61, 63, 61, 66, 58, 61, 58, 63, 56, 58, 56, 61, 54, 56, 61, 66];
+let yukiStepM = 0, yukiMusicTimer = null, yukiOwnCtx = false;
+function yukiTick() {
+  if (!jazzCtx || jazzCtx.state !== "running") return;
+  const t = jazzCtx.currentTime, i = yukiStepM % 16, n = YUKI_STAB[i];
+  crunchTone(mf(n), t, 0.09, "sawtooth", 0.06);
+  if (i % 2 === 0) crunchTone(mf(n + 6), t, 0.06, "square", 0.042); // jagged dissonant layer
+  if (i % 4 === 0) crunchNoise(t, 0.14, 0.2, null, 170);            // slam
+  else if (i % 4 === 2) crunchNoise(t, 0.05, 0.075, 5200);          // sharp tick
+  yukiStepM++;
+}
+function startYukiMusic() {
+  stopYukiMusic();
+  if (!jazzCtx) {
+    try { jazzCtx = new (window.AudioContext || window.webkitAudioContext)(); yukiOwnCtx = true; } catch (e) { return; }
+  }
+  if (jazzCtx.state === "suspended") jazzCtx.resume();
+  clearInterval(jazzTimer);
+  jazzTimer = null;
+  yukiStepM = 0;
+  yukiMusicTimer = setInterval(yukiTick, (60 / YUKI_BPM / 2) * 1000);
+}
+function stopYukiMusic() {
+  clearInterval(yukiMusicTimer);
+  yukiMusicTimer = null;
+  if (yukiOwnCtx && !musicOn && jazzCtx) { try { jazzCtx.close(); } catch (e) {} jazzCtx = null; }
+  yukiOwnCtx = false;
+  if (musicOn) startMusicTimer();
+}
+
+// If Yuki already got loose in a past session, he is waiting on the desktop.
+if (yukiUnlocked) {
+  spawnYuki();
+  yukiSetForm(yukiForm, true);
+  setYukiMood("normal");
+  // If he wiped the PC before, the beef continues on reload.
+  if (yukiHacked) setTimeout(() => { if (typeof startYukiBeef === "function") startYukiBeef(); }, 2000);
 }
